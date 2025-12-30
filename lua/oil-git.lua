@@ -9,6 +9,8 @@ local default_highlights = {
 	OilGitRenamed = { fg = "#cba6f7" },
 	OilGitUntracked = { fg = "#89b4fa" },
 	OilGitIgnored = { fg = "#6c7086" },
+	OilGitDeleted = { fg = "#f38ba8" },
+	OilGitConflict = { fg = "#fab387" },
 }
 
 local function setup_highlights()
@@ -34,7 +36,7 @@ local function parse_git_output(output, git_root)
 			local status_code = line:sub(1, 2)
 			local filepath = line:sub(4)
 
-			if status_code:sub(1, 1) == "R" then
+			if status_code:sub(1, 1) == "R" or status_code:sub(1, 1) == "C" then
 				local arrow_pos = filepath:find(" %-> ")
 				if arrow_pos then
 					filepath = filepath:sub(arrow_pos + 4)
@@ -107,16 +109,31 @@ local function get_highlight_group(status_code)
 	local first_char = status_code:sub(1, 1)
 	local second_char = status_code:sub(2, 2)
 
+	if
+		first_char == "U"
+		or second_char == "U"
+		or (first_char == "A" and second_char == "A")
+		or (first_char == "D" and second_char == "D")
+	then
+		return "OilGitConflict", "!"
+	end
+
 	if first_char == "A" then
 		return "OilGitAdded", "+"
 	elseif first_char == "M" then
 		return "OilGitModified", "~"
 	elseif first_char == "R" then
 		return "OilGitRenamed", "→"
+	elseif first_char == "D" then
+		return "OilGitDeleted", "D"
+	elseif first_char == "C" then
+		return "OilGitRenamed", "C"
 	end
 
 	if second_char == "M" then
 		return "OilGitModified", "~"
+	elseif second_char == "D" then
+		return "OilGitDeleted", "D"
 	end
 
 	if status_code == "??" then
@@ -124,7 +141,7 @@ local function get_highlight_group(status_code)
 	end
 
 	if status_code == "!!" then
-		return "OilGitIgnored", "!"
+		return "OilGitIgnored", "◌"
 	end
 
 	return nil, nil

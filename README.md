@@ -2,6 +2,9 @@
 
 Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that shows git status by coloring file names and adding status symbols.
 
+> [!IMPORTANT]
+> This is a fork of [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim) with a fully async implementation. The original synchronous version remains available at the upstream repository.
+
 ## Screenshot
 
 ![Screenshot](oil-git-screenshot.png)
@@ -60,6 +63,8 @@ vim.cmd([[
   highlight OilGitAdded guifg=#00ff00
   highlight OilGitModified guifg=#ffff00  
   highlight OilGitRenamed guifg=#ff00ff
+  highlight OilGitDeleted guifg=#ff0000
+  highlight OilGitConflict guifg=#ff8800
   highlight OilGitUntracked guifg=#00ffff
   highlight OilGitIgnored guifg=#808080
 ]])
@@ -76,6 +81,8 @@ require("oil-git").setup({
     OilGitAdded = { fg = "#a6e3a1" },     -- green
     OilGitModified = { fg = "#f9e2af" },  -- yellow  
     OilGitRenamed = { fg = "#cba6f7" },   -- purple
+    OilGitDeleted = { fg = "#f38ba8" },   -- red
+    OilGitConflict = { fg = "#fab387" },  -- orange
     OilGitUntracked = { fg = "#89b4fa" }, -- blue
     OilGitIgnored = { fg = "#6c7086" },   -- gray
   }
@@ -89,8 +96,11 @@ require("oil-git").setup({
 | Added | **+** | Green | Staged new file |
 | Modified | **~** | Yellow | Modified file (staged or unstaged) |
 | Renamed | **→** | Purple | Renamed file |
+| Deleted | **D** | Red | Deleted file (staged or unstaged) |
+| Copied | **C** | Purple | Copied file |
+| Conflict | **!** | Orange | Merge conflict |
 | Untracked | **?** | Blue | New untracked file |
-| Ignored | **!** | Gray | Ignored file |
+| Ignored | **◌** | Gray | Ignored file |
 
 ## Auto-refresh Triggers
 
@@ -116,7 +126,6 @@ The plugin automatically refreshes git status when:
 ## Roadmap
 
 - Directory status highlighting
-- Additional git statuses (Deleted, Copied, Conflicts)
 
 ## License
 
