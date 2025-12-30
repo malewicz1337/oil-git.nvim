@@ -1,6 +1,8 @@
 local M = {}
 
--- Default highlight colors (only used if not already defined)
+local pending_timer = nil
+local DEBOUNCE_MS = 50
+
 local default_highlights = {
 	OilGitAdded = { fg = "#a6e3a1" },
 	OilGitModified = { fg = "#f9e2af" },
@@ -10,7 +12,6 @@ local default_highlights = {
 }
 
 local function setup_highlights()
-	-- Only set highlight if it doesn't already exist (respects colorscheme)
 	for name, opts in pairs(default_highlights) do
 		if vim.fn.hlexists(name) == 0 then
 			vim.api.nvim_set_hl(0, name, opts)
@@ -23,30 +24,16 @@ local function get_git_root(path)
 	if git_dir == "" then
 		return nil
 	end
-	-- Get the parent directory of .git, not .git itself
 	return vim.fn.fnamemodify(git_dir, ":p:h:h")
 end
 
-local function get_git_status(dir)
-	local git_root = get_git_root(dir)
-	if not git_root then
-		return {}
-	end
-
-	local cmd = string.format("cd %s && git status --porcelain --ignored", vim.fn.shellescape(git_root))
-	local output = vim.fn.system(cmd)
-
-	if vim.v.shell_error ~= 0 then
-		return {}
-	end
-
+local function parse_git_output(output, git_root)
 	local status = {}
 	for line in output:gmatch("[^\r\n]+") do
 		if #line >= 3 then
 			local status_code = line:sub(1, 2)
 			local filepath = line:sub(4)
 
-			-- Handle renames (format: "old-name -> new-name")
 			if status_code:sub(1, 1) == "R" then
 				local arrow_pos = filepath:find(" %-> ")
 				if arrow_pos then
@@ -54,19 +41,62 @@ local function get_git_status(dir)
 				end
 			end
 
-			-- Remove leading "./" if present
 			if filepath:sub(1, 2) == "./" then
 				filepath = filepath:sub(3)
 			end
 
-			-- Convert to absolute path
 			local abs_path = git_root .. "/" .. filepath
 
 			status[abs_path] = status_code
 		end
 	end
-
 	return status
+end
+
+local function get_git_status_async(dir, callback)
+	local git_root = get_git_root(dir)
+	if not git_root then
+		callback({})
+		return
+	end
+
+	local stdout = vim.loop.new_pipe(false)
+	local output = ""
+
+	local handle
+	handle = vim.loop.spawn("git", {
+		args = { "status", "--porcelain", "--ignored" },
+		cwd = git_root,
+		stdio = { nil, stdout, nil },
+	}, function(code)
+		stdout:read_stop()
+		stdout:close()
+		handle:close()
+
+		if code ~= 0 then
+			vim.schedule(function()
+				callback({})
+			end)
+			return
+		end
+
+		local status = parse_git_output(output, git_root)
+		vim.schedule(function()
+			callback(status)
+		end)
+	end)
+
+	if not handle then
+		stdout:close()
+		callback({})
+		return
+	end
+
+	stdout:read_start(function(_, data)
+		if data then
+			output = output .. data
+		end
+	end)
 end
 
 local function get_highlight_group(status_code)
@@ -77,7 +107,6 @@ local function get_highlight_group(status_code)
 	local first_char = status_code:sub(1, 1)
 	local second_char = status_code:sub(2, 2)
 
-	-- Check staged changes first (prioritize staged over unstaged)
 	if first_char == "A" then
 		return "OilGitAdded", "+"
 	elseif first_char == "M" then
@@ -86,17 +115,14 @@ local function get_highlight_group(status_code)
 		return "OilGitRenamed", "→"
 	end
 
-	-- Check unstaged changes
 	if second_char == "M" then
 		return "OilGitModified", "~"
 	end
 
-	-- Untracked files
 	if status_code == "??" then
 		return "OilGitUntracked", "?"
 	end
 
-	-- Ignored files
 	if status_code == "!!" then
 		return "OilGitIgnored", "!"
 	end
@@ -105,33 +131,23 @@ local function get_highlight_group(status_code)
 end
 
 local function clear_highlights()
-	-- Clear existing git highlights and virtual text
-	for name, _ in pairs(default_highlights) do
+	for _, _ in pairs(default_highlights) do
 		vim.fn.clearmatches()
 	end
 
-	-- Clear existing virtual text
 	local ns_id = vim.api.nvim_create_namespace("oil_git_status")
 	local bufnr = vim.api.nvim_get_current_buf()
 	vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
 end
 
-local function apply_git_highlights()
+local function apply_highlights_to_buffer(bufnr, current_dir, git_status)
 	local oil = require("oil")
-	local current_dir = oil.get_current_dir()
 
-	if not current_dir then
-		clear_highlights()
-		return
-	end
-
-	local git_status = get_git_status(current_dir)
 	if vim.tbl_isempty(git_status) then
 		clear_highlights()
 		return
 	end
 
-	local bufnr = vim.api.nvim_get_current_buf()
 	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
 	clear_highlights()
@@ -145,13 +161,10 @@ local function apply_git_highlights()
 			local hl_group, symbol = get_highlight_group(status_code)
 
 			if hl_group and symbol then
-				-- Find the filename part in the line and highlight it
 				local name_start = line:find(entry.name, 1, true)
 				if name_start then
-					-- Highlight the filename
 					vim.fn.matchaddpos(hl_group, { { i, name_start, #entry.name } })
 
-					-- Add symbol as virtual text at the end of the line
 					local ns_id = vim.api.nvim_create_namespace("oil_git_status")
 					vim.api.nvim_buf_set_extmark(bufnr, ns_id, i - 1, 0, {
 						virt_text = { { " " .. symbol, hl_group } },
@@ -164,67 +177,86 @@ local function apply_git_highlights()
 	end
 end
 
+local function apply_git_highlights()
+	local oil = require("oil")
+	local current_dir = oil.get_current_dir()
+	local bufnr = vim.api.nvim_get_current_buf()
+
+	if not current_dir then
+		clear_highlights()
+		return
+	end
+
+	get_git_status_async(current_dir, function(git_status)
+		if not vim.api.nvim_buf_is_valid(bufnr) then
+			return
+		end
+		local new_dir = oil.get_current_dir()
+		if new_dir ~= current_dir then
+			return
+		end
+
+		apply_highlights_to_buffer(bufnr, current_dir, git_status)
+	end)
+end
+
+local function apply_git_highlights_debounced()
+	if pending_timer then
+		vim.fn.timer_stop(pending_timer)
+	end
+	pending_timer = vim.fn.timer_start(DEBOUNCE_MS, function()
+		pending_timer = nil
+		apply_git_highlights()
+	end)
+end
+
 local function setup_autocmds()
 	local group = vim.api.nvim_create_augroup("OilGitStatus", { clear = true })
 
 	vim.api.nvim_create_autocmd("BufEnter", {
 		group = group,
 		pattern = "oil://*",
-		callback = function()
-			vim.schedule(apply_git_highlights)
-		end,
+		callback = apply_git_highlights_debounced,
 	})
 
-	-- Clear highlights when leaving oil buffers
 	vim.api.nvim_create_autocmd("BufLeave", {
 		group = group,
 		pattern = "oil://*",
 		callback = clear_highlights,
 	})
 
-	-- Refresh when oil buffer content changes (file operations)
 	vim.api.nvim_create_autocmd({ "BufWritePost", "TextChanged", "TextChangedI" }, {
 		group = group,
 		pattern = "oil://*",
-		callback = function()
-			vim.schedule(apply_git_highlights)
-		end,
+		callback = apply_git_highlights_debounced,
 	})
 
-	-- Multiple events to catch lazygit closure
 	vim.api.nvim_create_autocmd({ "FocusGained", "WinEnter", "BufWinEnter" }, {
 		group = group,
 		pattern = "oil://*",
-		callback = function()
-			vim.schedule(apply_git_highlights)
-		end,
+		callback = apply_git_highlights_debounced,
 	})
 
-	-- Terminal events (for when lazygit closes)
 	vim.api.nvim_create_autocmd("TermClose", {
 		group = group,
 		callback = function()
-			vim.schedule(function()
-				if vim.bo.filetype == "oil" then
-					apply_git_highlights()
-				end
-			end)
+			if vim.bo.filetype == "oil" then
+				apply_git_highlights_debounced()
+			end
 		end,
 	})
 
-	-- Also catch common git-related user events
 	vim.api.nvim_create_autocmd("User", {
 		group = group,
 		pattern = { "FugitiveChanged", "GitSignsUpdate", "LazyGitClosed" },
 		callback = function()
 			if vim.bo.filetype == "oil" then
-				vim.schedule(apply_git_highlights)
+				apply_git_highlights_debounced()
 			end
 		end,
 	})
 end
 
--- Track if plugin has been initialized
 local initialized = false
 
 local function initialize()
@@ -240,7 +272,6 @@ end
 function M.setup(opts)
 	opts = opts or {}
 
-	-- Merge user highlights with defaults (only affects fallbacks)
 	if opts.highlights then
 		default_highlights = vim.tbl_extend("force", default_highlights, opts.highlights)
 	end
@@ -248,7 +279,6 @@ function M.setup(opts)
 	initialize()
 end
 
--- Auto-initialize when oil buffer is entered (if not already done)
 vim.api.nvim_create_autocmd("FileType", {
 	pattern = "oil",
 	callback = function()
@@ -257,7 +287,6 @@ vim.api.nvim_create_autocmd("FileType", {
 	group = vim.api.nvim_create_augroup("OilGitAutoInit", { clear = true }),
 })
 
--- Manual refresh function
 function M.refresh()
 	apply_git_highlights()
 end
