@@ -4,15 +4,15 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 
 ## Screenshot
 
- ![Screenshot](oil-git-screenshot.png)
+![Screenshot](oil-git-screenshot.png)
 
 ## Features
 
-- 🎨 **File name highlighting** - Colors files based on git status
-- 📝 **Status symbols** - Shows git symbols at end of lines
-- 🚀 **Real-time updates** - Automatically refreshes when git changes occur
-- ⚡ **Performance optimized** - No caching, always fresh git status
-- 🔄 **LazyGit integration** - Updates instantly when closing LazyGit or other git tools
+- **File name highlighting** - Colors files based on git status
+- **Status symbols** - Shows git symbols at end of lines
+- **Real-time updates** - Automatically refreshes when git changes occur
+- **Async & debounced** - Non-blocking git status with configurable debounce
+- **LazyGit integration** - Updates instantly when closing LazyGit or other git tools
 
 ## Installation
 
@@ -22,7 +22,6 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 {
   "benomahony/oil-git.nvim",
   dependencies = { "stevearc/oil.nvim" },
-  -- No opts or config needed! Works automatically
 }
 ```
 
@@ -34,7 +33,7 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
   dependencies = { "stevearc/oil.nvim" },
   opts = {
     highlights = {
-      OilGitModified = { fg = "#ff0000" }, -- Custom colors
+      OilGitModified = { fg = "#ff0000" }, 
     }
   }
 }
@@ -43,13 +42,11 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 ### With other plugin managers
 
 ```lua
--- Packer (no setup required)
 use {
   "benomahony/oil-git.nvim",
   requires = { "stevearc/oil.nvim" },
 }
 
--- Plug (no setup required)
 Plug 'stevearc/oil.nvim'
 Plug 'benomahony/oil-git.nvim'
 ```
@@ -59,7 +56,6 @@ Plug 'benomahony/oil-git.nvim'
 The plugin respects highlight groups defined in your colorscheme. Add these to your colorscheme or init.lua:
 
 ```lua
--- Example: Custom colors in your colorscheme
 vim.cmd([[
   highlight OilGitAdded guifg=#00ff00
   highlight OilGitModified guifg=#ffff00  
@@ -75,6 +71,7 @@ The plugin only sets default colors if highlight groups don't already exist.
 
 ```lua
 require("oil-git").setup({
+  debounce_ms = 50,  -- debounce time in milliseconds (default: 50)
   highlights = {
     OilGitAdded = { fg = "#a6e3a1" },     -- green
     OilGitModified = { fg = "#f9e2af" },  -- yellow  
@@ -116,6 +113,11 @@ The plugin automatically refreshes git status when:
 - [oil.nvim](https://github.com/stevearc/oil.nvim)
 - Git
 
+## Roadmap
+
+- Directory status highlighting
+- Additional git statuses (Deleted, Copied, Conflicts)
+
 ## License
 
-MIT
+This project is open source and available under the [MIT Licence](LICENSE).

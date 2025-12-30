@@ -1,7 +1,7 @@
 local M = {}
 
 local pending_timer = nil
-local DEBOUNCE_MS = 50
+local debounce_ms = 50
 
 local default_highlights = {
 	OilGitAdded = { fg = "#a6e3a1" },
@@ -204,7 +204,7 @@ local function apply_git_highlights_debounced()
 	if pending_timer then
 		vim.fn.timer_stop(pending_timer)
 	end
-	pending_timer = vim.fn.timer_start(DEBOUNCE_MS, function()
+	pending_timer = vim.fn.timer_start(debounce_ms, function()
 		pending_timer = nil
 		apply_git_highlights()
 	end)
@@ -274,6 +274,10 @@ function M.setup(opts)
 
 	if opts.highlights then
 		default_highlights = vim.tbl_extend("force", default_highlights, opts.highlights)
+	end
+
+	if opts.debounce_ms then
+		debounce_ms = opts.debounce_ms
 	end
 
 	initialize()
