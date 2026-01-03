@@ -3,7 +3,7 @@
 Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that shows git status by coloring file names and adding status symbols.
 
 > [!IMPORTANT]
-> This is a fork of [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim) with a fully async implementation. The original synchronous version remains available at the upstream repository.
+> This fork adds async git status, directory status highlighting, debouncing, and additional git status types (deleted, copied, conflict). Requires Neovim >= 0.10. The original synchronous version is at [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim).
 
 ## Screenshot
 
@@ -12,7 +12,8 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 ## Features
 
 - **File name highlighting** - Colors files based on git status
-- **Status symbols** - Shows git symbols at end of lines
+- **Directory status highlighting** - Shows aggregate status of directory contents
+- **Status symbols** - Shows git symbols at end of lines (customizable per file/directory)
 - **Real-time updates** - Automatically refreshes when git changes occur
 - **Async & debounced** - Non-blocking git status with configurable debounce
 - **LazyGit integration** - Updates instantly when closing LazyGit or other git tools
@@ -77,6 +78,30 @@ The plugin only sets default colors if highlight groups don't already exist.
 ```lua
 require("oil-git").setup({
   debounce_ms = 50,  -- debounce time in milliseconds (default: 50)
+  show_directory_status = true,  -- show git status for directories (default: true)
+  symbols = {
+    file = {
+      added = "+",
+      modified = "~",
+      renamed = "->",
+      deleted = "D",
+      copied = "C",
+      conflict = "!",
+      untracked = "?",
+      ignored = "o",
+    },
+    directory = {
+      -- VS Code-style: directories show a dot instead of letters
+      added = "*",
+      modified = "*",
+      renamed = "*",
+      deleted = "*",
+      copied = "*",
+      conflict = "!",   
+      untracked = "*",
+      ignored = "o",
+    },
+  },
   highlights = {
     OilGitAdded = { fg = "#a6e3a1" },     -- green
     OilGitModified = { fg = "#f9e2af" },  -- yellow  
@@ -91,16 +116,34 @@ require("oil-git").setup({
 
 ## Git Status Display
 
+### File Status
+
 | Status | Symbol | Color | Description |
-|--------|---------|-------|-------------|
+|--------|--------|-------|-------------|
 | Added | **+** | Green | Staged new file |
 | Modified | **~** | Yellow | Modified file (staged or unstaged) |
-| Renamed | **→** | Purple | Renamed file |
+| Renamed | **->** | Purple | Renamed file |
 | Deleted | **D** | Red | Deleted file (staged or unstaged) |
 | Copied | **C** | Purple | Copied file |
 | Conflict | **!** | Orange | Merge conflict |
 | Untracked | **?** | Blue | New untracked file |
-| Ignored | **◌** | Gray | Ignored file |
+| Ignored | **o** | Gray | Ignored file |
+
+### Directory Status
+
+Directories display the "most significant" status among their contents. The symbol is a colored dot by default (VS Code-style), indicating the directory contains files with changes.
+
+| Priority | Status | Description |
+|----------|--------|-------------|
+| 7 | Conflict | Highest - merge conflicts need immediate attention |
+| 6 | Modified | Staged or unstaged changes |
+| 5 | Deleted | Deleted files |
+| 4 | Added | New staged files |
+| 3 | Renamed/Copied | Renamed or copied files |
+| 2 | Untracked | New untracked files |
+| 1 | Ignored | Lowest - only shown if all contents are ignored |
+
+**Example:** If a directory contains one modified file and one untracked file, the directory shows as "modified" (higher priority) with the corresponding color.
 
 ## Auto-refresh Triggers
 
@@ -119,13 +162,9 @@ The plugin automatically refreshes git status when:
 
 ## Requirements
 
-- Neovim >= 0.8
+- Neovim >= 0.10
 - [oil.nvim](https://github.com/stevearc/oil.nvim)
 - Git
-
-## Roadmap
-
-- Directory status highlighting
 
 ## License
 
