@@ -35,6 +35,7 @@ local default_config = {
 		OilGitIgnored = { fg = "#6c7086" },
 		OilGitDeleted = { fg = "#f38ba8" },
 		OilGitConflict = { fg = "#fab387" },
+		OilGitCopied = { fg = "#cba6f7" },
 	},
 }
 
@@ -264,7 +265,7 @@ local function get_highlight_group(status_code, entry_type)
 	elseif first_char == "D" then
 		return "OilGitDeleted", symbols.deleted
 	elseif first_char == "C" then
-		return "OilGitRenamed", symbols.copied
+		return "OilGitCopied", symbols.copied
 	end
 
 	if second_char == "M" then

@@ -3,11 +3,16 @@
 Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that shows git status by coloring file names and adding status symbols.
 
 > [!IMPORTANT]
-> This fork adds async git status, directory status highlighting, debouncing, and additional git status types (deleted, copied, conflict). Requires Neovim >= 0.10. The original synchronous version is at [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim).
+> This fork adds async git status, directory status highlighting, debouncing, and additional git status types (deleted, copied, conflict). Requires Neovim >= 0.8. The original synchronous version is at [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim).
 
-## Screenshot
+## Screenshots
 
-![Screenshot](oil-git-screenshot.png)
+<table>
+  <tr>
+    <td><img src="screenshots/oil-git-screenshot.png" alt="File status" width="400"/></td>
+    <td><img src="screenshots/oil-git-directories-screenshot.png" alt="Directory status" width="400"/></td>
+  </tr>
+</table>
 
 ## Features
 
@@ -24,7 +29,7 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 
 ```lua
 {
-  "benomahony/oil-git.nvim",
+  "malewicz1337/oil-git.nvim",
   dependencies = { "stevearc/oil.nvim" },
 }
 ```
@@ -33,7 +38,7 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 
 ```lua
 {
-  "benomahony/oil-git.nvim",
+  "malewicz1337/oil-git.nvim",
   dependencies = { "stevearc/oil.nvim" },
   opts = {
     highlights = {
@@ -47,31 +52,32 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 
 ```lua
 use {
-  "benomahony/oil-git.nvim",
+  "malewicz1337/oil-git.nvim",
   requires = { "stevearc/oil.nvim" },
 }
 
 Plug 'stevearc/oil.nvim'
-Plug 'benomahony/oil-git.nvim'
+Plug 'malewicz1337/oil-git.nvim'
 ```
 
 ## Colorscheme Integration
 
-The plugin respects highlight groups defined in your colorscheme. Add these to your colorscheme or init.lua:
+The plugin respects highlight groups defined in your colorscheme. Add these to your colorscheme or init.lua to override the defaults:
 
 ```lua
 vim.cmd([[
-  highlight OilGitAdded guifg=#00ff00
-  highlight OilGitModified guifg=#ffff00  
-  highlight OilGitRenamed guifg=#ff00ff
-  highlight OilGitDeleted guifg=#ff0000
-  highlight OilGitConflict guifg=#ff8800
-  highlight OilGitUntracked guifg=#00ffff
-  highlight OilGitIgnored guifg=#808080
+  highlight OilGitAdded guifg=#a6e3a1
+  highlight OilGitModified guifg=#f9e2af
+  highlight OilGitRenamed guifg=#cba6f7
+  highlight OilGitDeleted guifg=#f38ba8
+  highlight OilGitCopied guifg=#cba6f7
+  highlight OilGitConflict guifg=#fab387
+  highlight OilGitUntracked guifg=#89b4fa
+  highlight OilGitIgnored guifg=#6c7086
 ]])
 ```
 
-The plugin only sets default colors if highlight groups don't already exist.
+The plugin only sets these default colors if highlight groups don't already exist.
 
 ## Configuration
 
@@ -97,7 +103,7 @@ require("oil-git").setup({
       renamed = "*",
       deleted = "*",
       copied = "*",
-      conflict = "!",   
+      conflict = "!",
       untracked = "*",
       ignored = "o",
     },
@@ -110,6 +116,7 @@ require("oil-git").setup({
     OilGitConflict = { fg = "#fab387" },  -- orange
     OilGitUntracked = { fg = "#89b4fa" }, -- blue
     OilGitIgnored = { fg = "#6c7086" },   -- gray
+    OilGitCopied = { fg = "#cba6f7" },   -- purple
   }
 })
 ```
@@ -162,9 +169,13 @@ The plugin automatically refreshes git status when:
 
 ## Requirements
 
-- Neovim >= 0.10
+- Neovim >= 0.8
 - [oil.nvim](https://github.com/stevearc/oil.nvim)
 - Git
+
+## Credits
+
+This is an enhanced fork of [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim). Thanks to the original author for the foundation.
 
 ## License
 
