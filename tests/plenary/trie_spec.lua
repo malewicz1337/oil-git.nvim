@@ -17,6 +17,8 @@ describe("trie", function()
 			assert.same({}, node.children)
 			assert.is_nil(node.status)
 			assert.equals(0, node.priority)
+			assert.is_false(node.is_dir_ignored)
+			assert.is_false(node.is_dir_untracked)
 		end)
 
 		it("should create independent nodes", function()
@@ -42,35 +44,38 @@ describe("trie", function()
 			assert.is_not_nil(root.children["src"].children["file.lua"])
 		end)
 
-		it("should set status on intermediate directories", function()
+		it(
+			"should set status only on leaf node, not intermediate directories",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/src/file.lua", "M ", git_root)
+
+				assert.is_nil(root.children["src"].status)
+				assert.equals(0, root.children["src"].priority)
+				assert.equals(
+					"M ",
+					root.children["src"].children["file.lua"].status
+				)
+				assert.equals(
+					6,
+					root.children["src"].children["file.lua"].priority
+				)
+			end
+		)
+
+		it("should handle multiple files in same directory", function()
 			local root = trie.create_node()
 			local git_root = "/repo"
-			trie.insert(root, "/repo/src/file.lua", "M ", git_root)
 
-			assert.equals("M ", root.children["src"].status)
-			assert.equals(6, root.children["src"].priority) -- MODIFIED = 6
-		end)
-
-		it("should update status with higher priority", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-
-			trie.insert(root, "/repo/src/a.lua", "??", git_root) -- UNTRACKED = 2
+			trie.insert(root, "/repo/src/a.lua", "A ", git_root) -- ADDED = 4
 			trie.insert(root, "/repo/src/b.lua", "M ", git_root) -- MODIFIED = 6
+			trie.insert(root, "/repo/src/c.lua", "??", git_root) -- UNTRACKED = 2
 
-			assert.equals("M ", root.children["src"].status)
-			assert.equals(6, root.children["src"].priority)
-		end)
-
-		it("should not downgrade status with lower priority", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-
-			trie.insert(root, "/repo/src/a.lua", "M ", git_root) -- MODIFIED = 6
-			trie.insert(root, "/repo/src/b.lua", "??", git_root) -- UNTRACKED = 2
-
-			assert.equals("M ", root.children["src"].status)
-			assert.equals(6, root.children["src"].priority)
+			assert.is_nil(root.children["src"].status)
+			assert.equals("A ", root.children["src"].children["a.lua"].status)
+			assert.equals("M ", root.children["src"].children["b.lua"].status)
+			assert.equals("??", root.children["src"].children["c.lua"].status)
 		end)
 
 		it("should handle deeply nested paths", function()
@@ -85,21 +90,7 @@ describe("trie", function()
 				root.children["a"].children["b"].children["c"].children["d"]
 			assert.is_not_nil(d_node)
 			assert.is_not_nil(d_node.children["file.lua"])
-		end)
-
-		it("should propagate status up the tree", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-			trie.insert(root, "/repo/a/b/c/file.lua", "UU", git_root) -- CONFLICT = 7
-
-			assert.equals(7, root.children["a"].priority)
-			assert.equals(7, root.children["a"].children["b"].priority)
-			assert.equals(
-				7,
-				root.children["a"].children["b"].children["c"].priority
-			)
-			assert.equals("UU", root.children["a"].status)
-			assert.equals("UU", root.children["a"].children["b"].status)
+			assert.equals("A ", d_node.children["file.lua"].status)
 		end)
 
 		it("should ignore zero priority status codes", function()
@@ -108,18 +99,6 @@ describe("trie", function()
 			trie.insert(root, "/repo/file.lua", "XX", git_root) -- unknown, priority 0
 
 			assert.same({}, root.children)
-		end)
-
-		it("should handle multiple files in same directory", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-
-			trie.insert(root, "/repo/src/a.lua", "A ", git_root) -- ADDED = 4
-			trie.insert(root, "/repo/src/b.lua", "M ", git_root) -- MODIFIED = 6
-			trie.insert(root, "/repo/src/c.lua", "??", git_root) -- UNTRACKED = 2
-
-			assert.equals("M ", root.children["src"].status)
-			assert.equals(6, root.children["src"].priority)
 		end)
 
 		it("should handle files in different directories", function()
@@ -131,19 +110,14 @@ describe("trie", function()
 
 			assert.is_not_nil(root.children["src"])
 			assert.is_not_nil(root.children["tests"])
-			assert.equals("A ", root.children["src"].status)
-			assert.equals("M ", root.children["tests"].status)
-		end)
-
-		it("should keep same status when priority is equal", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-
-			trie.insert(root, "/repo/src/a.lua", "R ", git_root)
-			trie.insert(root, "/repo/src/b.lua", "C ", git_root)
-
-			assert.equals("R ", root.children["src"].status)
-			assert.equals(3, root.children["src"].priority)
+			assert.equals(
+				"A ",
+				root.children["src"].children["file.lua"].status
+			)
+			assert.equals(
+				"M ",
+				root.children["tests"].children["test.lua"].status
+			)
 		end)
 
 		it("should handle root-level files", function()
@@ -154,6 +128,47 @@ describe("trie", function()
 			assert.is_not_nil(root.children["file.lua"])
 			assert.equals("M ", root.children["file.lua"].status)
 		end)
+
+		it(
+			"should mark directory as ignored when is_directory flag is true",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/node_modules", "!!", git_root, true)
+
+				assert.is_true(root.children["node_modules"].is_dir_ignored)
+			end
+		)
+
+		it("should not mark file as dir_ignored even with !! status", function()
+			local root = trie.create_node()
+			local git_root = "/repo"
+			trie.insert(root, "/repo/.DS_Store", "!!", git_root, false)
+
+			assert.is_false(root.children[".DS_Store"].is_dir_ignored)
+		end)
+
+		it(
+			"should mark directory as untracked when is_directory flag is true",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/new_dir", "??", git_root, true)
+
+				assert.is_true(root.children["new_dir"].is_dir_untracked)
+			end
+		)
+
+		it(
+			"should not mark file as dir_untracked even with ?? status",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/new_file.lua", "??", git_root, false)
+
+				assert.is_false(root.children["new_file.lua"].is_dir_untracked)
+			end
+		)
 	end)
 
 	describe("lookup", function()
@@ -174,14 +189,27 @@ describe("trie", function()
 			assert.is_nil(result)
 		end)
 
-		it("should find existing directory status", function()
+		it("should return status for file path", function()
 			local root = trie.create_node()
 			local git_root = "/repo"
-			trie.insert(root, "/repo/src/file.lua", "M ", git_root)
+			trie.insert(root, "/repo/src/file.lua", "A ", git_root)
 
-			local result = trie.lookup(root, "/repo/src", git_root)
-			assert.equals("M ", result)
+			local result = trie.lookup(root, "/repo/src/file.lua", git_root)
+			assert.equals("A ", result)
 		end)
+
+		it(
+			"should compute directory status from children (highest priority)",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/src/a.lua", "??", git_root) -- UNTRACKED = 2
+				trie.insert(root, "/repo/src/b.lua", "M ", git_root) -- MODIFIED = 6
+
+				local result = trie.lookup(root, "/repo/src", git_root)
+				assert.equals("M ", result)
+			end
+		)
 
 		it("should handle trailing forward slash in lookup path", function()
 			local root = trie.create_node()
@@ -210,24 +238,18 @@ describe("trie", function()
 			assert.is_nil(result)
 		end)
 
-		it("should return status for intermediate directories", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-			trie.insert(root, "/repo/a/b/c/file.lua", "UU", git_root)
+		it(
+			"should compute status for intermediate directories from descendants",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/a/b/c/file.lua", "UU", git_root)
 
-			assert.equals("UU", trie.lookup(root, "/repo/a", git_root))
-			assert.equals("UU", trie.lookup(root, "/repo/a/b", git_root))
-			assert.equals("UU", trie.lookup(root, "/repo/a/b/c", git_root))
-		end)
-
-		it("should return status for file path", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-			trie.insert(root, "/repo/src/file.lua", "A ", git_root)
-
-			local result = trie.lookup(root, "/repo/src/file.lua", git_root)
-			assert.equals("A ", result)
-		end)
+				assert.equals("UU", trie.lookup(root, "/repo/a", git_root))
+				assert.equals("UU", trie.lookup(root, "/repo/a/b", git_root))
+				assert.equals("UU", trie.lookup(root, "/repo/a/b/c", git_root))
+			end
+		)
 
 		it("should return nil for empty path relative to git_root", function()
 			local root = trie.create_node()
@@ -260,94 +282,208 @@ describe("trie", function()
 		end)
 	end)
 
-	describe("untracked status inheritance", function()
-		it("should inherit untracked status for nested directories", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-			trie.insert(root, "/repo/untracked_dir/", "??", git_root)
-
-			assert.equals(
-				"??",
-				trie.lookup(root, "/repo/untracked_dir", git_root)
-			)
-			assert.equals(
-				"??",
-				trie.lookup(root, "/repo/untracked_dir/subdir", git_root)
-			)
-			assert.equals(
-				"??",
-				trie.lookup(root, "/repo/untracked_dir/subdir/deep", git_root)
-			)
-		end)
-
+	describe("exclude_ignored parameter", function()
 		it(
-			"should inherit untracked status for files in untracked directories",
+			"should exclude ignored files when exclude_ignored is true",
 			function()
 				local root = trie.create_node()
 				local git_root = "/repo"
-				trie.insert(root, "/repo/untracked_dir/", "??", git_root)
+				trie.insert(root, "/repo/src/.DS_Store", "!!", git_root, false)
+
+				local result =
+					trie.lookup(root, "/repo/src/.DS_Store", git_root, true)
+				assert.is_nil(result)
+
+				result =
+					trie.lookup(root, "/repo/src/.DS_Store", git_root, false)
+				assert.equals("!!", result)
+			end
+		)
+
+		it(
+			"should exclude ignored status from directory when exclude_ignored",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/src/.DS_Store", "!!", git_root, false)
+				trie.insert(root, "/repo/src/file.lua", "M ", git_root, false)
+
+				local result = trie.lookup(root, "/repo/src", git_root, true)
+				assert.equals("M ", result)
+			end
+		)
+
+		it(
+			"should return nil for directory with only ignored when exclude_ignored",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/src/.DS_Store", "!!", git_root, false)
+				trie.insert(root, "/repo/src/.env", "!!", git_root, false)
+
+				local result = trie.lookup(root, "/repo/src", git_root, true)
+				assert.is_nil(result)
+
+				result = trie.lookup(root, "/repo/src", git_root, false)
+				assert.equals("!!", result)
+			end
+		)
+
+		it(
+			"should return ignored status when exclude_ignored is false",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/node_modules", "!!", git_root, true)
+
+				local result =
+					trie.lookup(root, "/repo/node_modules", git_root, false)
+				assert.equals("!!", result)
+			end
+		)
+
+		it(
+			"should return nil for ignored directory when exclude_ignored is true",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/node_modules", "!!", git_root, true)
+
+				local result =
+					trie.lookup(root, "/repo/node_modules", git_root, true)
+				assert.is_nil(result)
+			end
+		)
+	end)
+
+	describe("ignored directory inheritance", function()
+		it(
+			"should inherit ignored status for paths inside ignored directory",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/node_modules", "!!", git_root, true)
 
 				assert.equals(
-					"??",
-					trie.lookup(root, "/repo/untracked_dir/file.txt", git_root)
-				)
-				assert.equals(
-					"??",
+					"!!",
 					trie.lookup(
 						root,
-						"/repo/untracked_dir/sub/file.txt",
-						git_root
+						"/repo/node_modules/lodash",
+						git_root,
+						false
+					)
+				)
+				assert.equals(
+					"!!",
+					trie.lookup(
+						root,
+						"/repo/node_modules/lodash/index.js",
+						git_root,
+						false
 					)
 				)
 			end
 		)
 
-		it("should inherit ignored status for nested paths", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-			trie.insert(root, "/repo/ignored_dir/", "!!", git_root)
+		it(
+			"should return nil for ignored dir children when exclude_ignored",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/node_modules", "!!", git_root, true)
 
-			assert.equals(
-				"!!",
-				trie.lookup(root, "/repo/ignored_dir/subdir", git_root)
-			)
-			assert.equals(
-				"!!",
-				trie.lookup(root, "/repo/ignored_dir/file.txt", git_root)
-			)
-		end)
-
-		it("should not inherit non-untracked status", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-			trie.insert(root, "/repo/src/file.lua", "M ", git_root)
-
-			assert.equals("M ", trie.lookup(root, "/repo/src", git_root))
-			assert.is_nil(trie.lookup(root, "/repo/src/nonexistent", git_root))
-		end)
-
-		it("should return exact status when path exists in trie", function()
-			local root = trie.create_node()
-			local git_root = "/repo"
-			trie.insert(root, "/repo/untracked_dir/", "??", git_root)
-
-			assert.equals(
-				"??",
-				trie.lookup(root, "/repo/untracked_dir", git_root)
-			)
-			assert.equals(
-				"??",
-				trie.lookup(root, "/repo/untracked_dir/file.lua", git_root)
-			)
-			assert.equals(
-				"??",
-				trie.lookup(
-					root,
-					"/repo/untracked_dir/nested/deep.lua",
-					git_root
+				assert.is_nil(
+					trie.lookup(
+						root,
+						"/repo/node_modules/lodash",
+						git_root,
+						true
+					)
 				)
-			)
-		end)
+				assert.is_nil(
+					trie.lookup(
+						root,
+						"/repo/node_modules/lodash/index.js",
+						git_root,
+						true
+					)
+				)
+			end
+		)
+
+		it(
+			"should NOT inherit ignored status from file to sibling paths",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/src/.DS_Store", "!!", git_root, false)
+
+				assert.is_nil(
+					trie.lookup(root, "/repo/src/file.lua", git_root, false)
+				)
+				assert.is_nil(
+					trie.lookup(root, "/repo/src/subdir", git_root, false)
+				)
+			end
+		)
+	end)
+
+	describe("untracked directory inheritance", function()
+		it(
+			"should inherit untracked status for paths inside untracked directory",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/untracked_dir", "??", git_root, true)
+
+				assert.equals(
+					"??",
+					trie.lookup(root, "/repo/untracked_dir", git_root)
+				)
+				assert.equals(
+					"??",
+					trie.lookup(root, "/repo/untracked_dir/subdir", git_root)
+				)
+				assert.equals(
+					"??",
+					trie.lookup(root, "/repo/untracked_dir/file.txt", git_root)
+				)
+			end
+		)
+
+		it(
+			"should NOT inherit untracked status from file to sibling paths",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(
+					root,
+					"/repo/src/new_file.lua",
+					"??",
+					git_root,
+					false
+				)
+
+				assert.equals("??", trie.lookup(root, "/repo/src", git_root))
+				assert.is_nil(
+					trie.lookup(root, "/repo/src/other_file.lua", git_root)
+				)
+			end
+		)
+
+		it(
+			"should not inherit non-untracked status to non-existent paths",
+			function()
+				local root = trie.create_node()
+				local git_root = "/repo"
+				trie.insert(root, "/repo/src/file.lua", "M ", git_root)
+
+				assert.equals("M ", trie.lookup(root, "/repo/src", git_root))
+				assert.is_nil(
+					trie.lookup(root, "/repo/src/nonexistent", git_root)
+				)
+			end
+		)
 	end)
 
 	describe("path validation edge cases", function()
@@ -426,7 +562,10 @@ describe("trie", function()
 			trie.insert(root, "/repo/src/file.lua", "M ", "/repo/")
 
 			assert.is_not_nil(root.children["src"])
-			assert.equals("M ", root.children["src"].status)
+			assert.equals(
+				"M ",
+				root.children["src"].children["file.lua"].status
+			)
 		end)
 
 		it(

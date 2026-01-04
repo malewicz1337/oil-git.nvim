@@ -27,10 +27,12 @@ function M.create_node()
 		children = {},
 		status = nil,
 		priority = 0,
+		is_dir_ignored = false,
+		is_dir_untracked = false,
 	}
 end
 
-function M.insert(root, filepath, status_code, git_root)
+function M.insert(root, filepath, status_code, git_root, is_directory)
 	local priority = status_mapper.get_priority(status_code)
 	if priority == 0 then
 		return
@@ -42,22 +44,56 @@ function M.insert(root, filepath, status_code, git_root)
 	end
 
 	local segments = path.split(rel_path)
+	local segment_count = #segments
 
 	local node = root
-	for _, segment in ipairs(segments) do
+	for i, segment in ipairs(segments) do
 		if not node.children[segment] then
 			node.children[segment] = M.create_node()
 		end
 		node = node.children[segment]
 
-		if priority > node.priority then
-			node.status = status_code
-			node.priority = priority
+		if i == segment_count then
+			if priority > node.priority then
+				node.status = status_code
+				node.priority = priority
+			end
+			if is_directory then
+				if status_code == constants.GIT_STATUS.IGNORED then
+					node.is_dir_ignored = true
+				elseif status_code == constants.GIT_STATUS.UNTRACKED then
+					node.is_dir_untracked = true
+				end
+			end
 		end
 	end
 end
 
-function M.lookup(root, dir_path, git_root)
+local function get_subtree_status(node, exclude_ignored)
+	local dominated_by_ignored = exclude_ignored
+		and node.status == constants.GIT_STATUS.IGNORED
+
+	local best_status = nil
+	local best_priority = 0
+
+	if node.status and not dominated_by_ignored then
+		best_status = node.status
+		best_priority = node.priority
+	end
+
+	for _, child in pairs(node.children) do
+		local child_status, child_priority =
+			get_subtree_status(child, exclude_ignored)
+		if child_priority > best_priority then
+			best_status = child_status
+			best_priority = child_priority
+		end
+	end
+
+	return best_status, best_priority
+end
+
+function M.lookup(root, dir_path, git_root, exclude_ignored)
 	if not root or not git_root then
 		return nil
 	end
@@ -69,23 +105,45 @@ function M.lookup(root, dir_path, git_root)
 
 	local segments = path.split(rel_path)
 	local node = root
-	local inherited_status = nil
 
 	for _, segment in ipairs(segments) do
-		if
-			node.status == constants.GIT_STATUS.UNTRACKED
-			or node.status == constants.GIT_STATUS.IGNORED
-		then
-			inherited_status = node.status
+		if node.is_dir_ignored then
+			if exclude_ignored then
+				return nil
+			end
+			return constants.GIT_STATUS.IGNORED
+		end
+
+		if node.is_dir_untracked then
+			return constants.GIT_STATUS.UNTRACKED
 		end
 
 		if not node.children[segment] then
-			return inherited_status
+			return nil
 		end
 		node = node.children[segment]
 	end
 
-	return node.status
+	if node.is_dir_ignored then
+		if exclude_ignored then
+			return nil
+		end
+		return constants.GIT_STATUS.IGNORED
+	end
+
+	if node.is_dir_untracked then
+		return constants.GIT_STATUS.UNTRACKED
+	end
+
+	if vim.tbl_isempty(node.children) then
+		if exclude_ignored and node.status == constants.GIT_STATUS.IGNORED then
+			return nil
+		end
+		return node.status
+	end
+
+	local subtree_status = get_subtree_status(node, exclude_ignored)
+	return subtree_status
 end
 
 return M

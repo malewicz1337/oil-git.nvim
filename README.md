@@ -64,6 +64,8 @@ require("oil-git").setup({
   show_directory_highlights = true,
   show_file_symbols = true,
   show_directory_symbols = true,
+  show_ignored_files = false,       -- Show ignored file status
+  show_ignored_directories = false, -- Show ignored directory status
   symbol_position = "eol",  -- "eol", "signcolumn", or "none"
   debug = false,            -- false, "minimal", or "verbose"
 
@@ -113,7 +115,7 @@ Directories show the highest-priority status among their contents:
 | 4 | Added | New staged files |
 | 3 | Renamed/Copied | Renamed or copied files |
 | 2 | Untracked | New untracked files |
-| 1 | Ignored | Only if all contents are ignored |
+| 1 | Ignored | Only shown when `show_ignored_directories = true` |
 
 ## Usage
 

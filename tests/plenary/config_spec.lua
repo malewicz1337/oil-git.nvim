@@ -31,6 +31,8 @@ describe("config", function()
 				show_directory_highlights = false,
 				show_file_symbols = false,
 				show_directory_symbols = false,
+				show_ignored_files = true,
+				show_ignored_directories = true,
 				symbol_position = "signcolumn",
 			})
 			local cfg = config.get()
@@ -38,6 +40,8 @@ describe("config", function()
 			assert.is_false(cfg.show_directory_highlights)
 			assert.is_false(cfg.show_file_symbols)
 			assert.is_false(cfg.show_directory_symbols)
+			assert.is_true(cfg.show_ignored_files)
+			assert.is_true(cfg.show_ignored_directories)
 			assert.equals("signcolumn", cfg.symbol_position)
 		end)
 
@@ -120,6 +124,8 @@ describe("config", function()
 			assert.is_true(cfg.show_directory_highlights)
 			assert.is_true(cfg.show_file_symbols)
 			assert.is_true(cfg.show_directory_symbols)
+			assert.is_false(cfg.show_ignored_files)
+			assert.is_false(cfg.show_ignored_directories)
 			assert.equals("eol", cfg.symbol_position)
 			assert.is_false(cfg.debug)
 

@@ -67,12 +67,14 @@ local function parse_output(output, git_root)
 			filepath = filepath:sub(3)
 		end
 
+		local is_directory = filepath:sub(-1) == "/"
+
 		filepath = path.git_to_os(filepath)
 		local abs_path = path.join(git_root, filepath)
 		abs_path = path.remove_trailing_slash(abs_path)
 
 		status[abs_path] = status_code
-		trie.insert(status_trie, abs_path, status_code, git_root)
+		trie.insert(status_trie, abs_path, status_code, git_root, is_directory)
 
 		::continue::
 	end

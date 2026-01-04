@@ -125,6 +125,8 @@ local function apply_to_buffer(
 	local show_directory_highlights = cfg.show_directory_highlights
 	local show_file_symbols = cfg.show_file_symbols
 	local show_directory_symbols = cfg.show_directory_symbols
+	local show_ignored_files = cfg.show_ignored_files
+	local show_ignored_directories = cfg.show_ignored_directories
 	local symbol_position = cfg.symbol_position
 	local use_signcolumn = symbol_position
 			== constants.SYMBOL_POSITIONS.SIGNCOLUMN
@@ -162,8 +164,15 @@ local function apply_to_buffer(
 				status_code = trie.lookup(
 					status_trie,
 					current_dir .. entry_name,
-					git_root
+					git_root,
+					not show_ignored_files
 				)
+			end
+			if
+				status_code == constants.GIT_STATUS.IGNORED
+				and not show_ignored_files
+			then
+				status_code = nil
 			end
 			show_highlight = show_file_highlights
 			show_symbol = show_file_symbols and symbols_not_disabled
@@ -176,7 +185,8 @@ local function apply_to_buffer(
 				status_code = trie.lookup(
 					status_trie,
 					current_dir .. entry_name,
-					git_root
+					git_root,
+					not show_ignored_directories
 				)
 			end
 		end
