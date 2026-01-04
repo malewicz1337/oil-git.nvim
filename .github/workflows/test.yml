@@ -1,0 +1,95 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: StyLua
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check .
+
+  check:
+    name: Luacheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: leafo/gh-actions-lua@v12
+        with:
+          luaVersion: "5.1"
+      - uses: leafo/gh-actions-luarocks@v4
+      - run: luarocks install luacheck
+      - run: luacheck .
+
+  test:
+    name: Tests
+    needs: [lint, check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v12
+        with:
+          luaVersion: "5.1"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install LuaCov
+        run: |
+          luarocks install luacov
+          luarocks install luacov-reporter-lcov
+
+      - name: Install plenary.nvim
+        run: |
+          mkdir -p ~/.local/share/nvim/site/pack/vendor/start
+          git clone --depth 1 https://github.com/nvim-lua/plenary.nvim ~/.local/share/nvim/site/pack/vendor/start/plenary.nvim
+
+      - name: Install oil.nvim
+        run: |
+          git clone --depth 1 https://github.com/stevearc/oil.nvim ~/.local/share/nvim/site/pack/vendor/start/oil.nvim
+
+      - name: Configure Git for tests
+        run: |
+          git config --global user.email "test@test.com"
+          git config --global user.name "Test"
+          git config --global init.defaultBranch main
+
+      - name: Run tests
+        run: |
+          nvim --headless -u tests/minimal_init.lua \
+            -c "lua require('luacov').init('.luacov')" \
+            -c "PlenaryBustedDirectory tests/plenary/ {minimal_init='tests/minimal_init.lua', sequential=true}"
+
+      - name: Generate coverage report
+        run: |
+          luacov
+          mkdir -p coverage
+          luacov-reporter-lcov -o coverage/lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: oil-git-coverage
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
