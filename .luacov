@@ -1,0 +1,16 @@
+return {
+	include = {
+		"lua/oil%-git/.+%.lua$",
+	},
+
+	exclude = {
+		"tests/",
+		"plenary",
+		"oil",
+	},
+
+	statsfile = "luacov.stats.out",
+	reportfile = "luacov.report.out",
+	runreport = false,
+	deletestats = false,
+}
