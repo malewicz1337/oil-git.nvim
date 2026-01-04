@@ -1,11 +1,22 @@
 # oil-git.nvim
 
-Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that shows git status by coloring file names and adding status symbols.
+<div align="center">
+
+[![Tests](https://github.com/malewicz1337/oil-git.nvim/actions/workflows/test.yml/badge.svg)](https://github.com/malewicz1337/oil-git.nvim/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/malewicz1337/oil-git.nvim/branch/main/graph/badge.svg)](https://codecov.io/gh/malewicz1337/oil-git.nvim)
+[![Neovim](https://img.shields.io/badge/Neovim-0.8+-blueviolet.svg?style=flat&logo=neovim)](https://neovim.io)
+[![Lua](https://img.shields.io/badge/Lua-blue.svg?style=flat&logo=lua)](https://www.lua.org)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/malewicz1337/oil-git.nvim?style=flat)](https://github.com/malewicz1337/oil-git.nvim/stargazers)
+[![GitHub last commit](https://img.shields.io/github/last-commit/malewicz1337/oil-git.nvim?style=flat)](https://github.com/malewicz1337/oil-git.nvim/commits)
+
+</div>
+
+Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) - colors file/directory names and adds status symbols.
 
 > [!IMPORTANT]
-> This fork adds async git status, directory status highlighting, debouncing, and additional git status types (deleted, copied, conflict). Requires Neovim >= 0.8. The original synchronous version is at [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim).
-
-## Screenshots
+> Enhanced fork of [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim) with async git status, directory highlighting, debouncing, and additional status types.
 
 <table>
   <tr>
@@ -16,156 +27,101 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 
 ## Features
 
-- **File name highlighting** - Colors files based on git status
-- **Directory status highlighting** - Shows aggregate status of directory contents
-- **Status symbols** - Shows git symbols at end of lines (customizable per file/directory)
-- **Real-time updates** - Automatically refreshes when git changes occur
-- **Async & debounced** - Non-blocking git status with configurable debounce
-- **LazyGit integration** - Updates instantly when closing LazyGit or other git tools
+- **File & directory highlighting** - Colors based on git status
+- **Status symbols** - Customizable symbols at end of lines
+- **Async & debounced** - Non-blocking with auto-refresh on git changes
 
 ## Installation
 
-### With LazyVim/lazy.nvim (No setup required!)
+**lazy.nvim** (no setup required):
 
 ```lua
-{
-  "malewicz1337/oil-git.nvim",
-  dependencies = { "stevearc/oil.nvim" },
-}
+{ "malewicz1337/oil-git.nvim", dependencies = { "stevearc/oil.nvim" } }
 ```
 
-### Optional configuration
+<details>
+<summary>Other plugin managers</summary>
 
+**Packer:**
 ```lua
-{
-  "malewicz1337/oil-git.nvim",
-  dependencies = { "stevearc/oil.nvim" },
-  opts = {
-    highlights = {
-      OilGitModified = { fg = "#ff0000" }, 
-    }
-  }
-}
+use { "malewicz1337/oil-git.nvim", requires = { "stevearc/oil.nvim" } }
 ```
 
-### With other plugin managers
-
-```lua
-use {
-  "malewicz1337/oil-git.nvim",
-  requires = { "stevearc/oil.nvim" },
-}
-
+**vim-plug:**
+```vim
 Plug 'stevearc/oil.nvim'
 Plug 'malewicz1337/oil-git.nvim'
 ```
-
-## Colorscheme Integration
-
-The plugin respects highlight groups defined in your colorscheme. Add these to your colorscheme or init.lua to override the defaults:
-
-```lua
-vim.cmd([[
-  highlight OilGitAdded guifg=#a6e3a1
-  highlight OilGitModified guifg=#f9e2af
-  highlight OilGitRenamed guifg=#cba6f7
-  highlight OilGitDeleted guifg=#f38ba8
-  highlight OilGitCopied guifg=#cba6f7
-  highlight OilGitConflict guifg=#fab387
-  highlight OilGitUntracked guifg=#89b4fa
-  highlight OilGitIgnored guifg=#6c7086
-]])
-```
-
-The plugin only sets these default colors if highlight groups don't already exist.
+</details>
 
 ## Configuration
 
+All options with defaults:
+
 ```lua
 require("oil-git").setup({
-  debounce_ms = 50,  -- debounce time in milliseconds (default: 50)
-  show_directory_status = true,  -- show git status for directories (default: true)
+  debounce_ms = 50,
+  show_file_highlights = true,
+  show_directory_highlights = true,
+  show_file_symbols = true,
+  show_directory_symbols = true,
+  symbol_position = "eol",  -- "eol", "signcolumn", or "none"
+  debug = false,            -- false, "minimal", or "verbose"
+
   symbols = {
-    file = {
-      added = "+",
-      modified = "~",
-      renamed = "->",
-      deleted = "D",
-      copied = "C",
-      conflict = "!",
-      untracked = "?",
-      ignored = "o",
-    },
-    directory = {
-      -- VS Code-style: directories show a dot instead of letters
-      added = "*",
-      modified = "*",
-      renamed = "*",
-      deleted = "*",
-      copied = "*",
-      conflict = "!",
-      untracked = "*",
-      ignored = "o",
-    },
+    file = { added = "+", modified = "~", renamed = "->", deleted = "D",
+             copied = "C", conflict = "!", untracked = "?", ignored = "o" },
+    directory = { added = "*", modified = "*", renamed = "*", deleted = "*",
+                  copied = "*", conflict = "!", untracked = "*", ignored = "o" },
   },
+
+  -- Colors (only applied if highlight groups don't exist)
   highlights = {
-    OilGitAdded = { fg = "#a6e3a1" },     -- green
-    OilGitModified = { fg = "#f9e2af" },  -- yellow  
-    OilGitRenamed = { fg = "#cba6f7" },   -- purple
-    OilGitDeleted = { fg = "#f38ba8" },   -- red
-    OilGitConflict = { fg = "#fab387" },  -- orange
-    OilGitUntracked = { fg = "#89b4fa" }, -- blue
-    OilGitIgnored = { fg = "#6c7086" },   -- gray
-    OilGitCopied = { fg = "#cba6f7" },   -- purple
-  }
+    OilGitAdded = { fg = "#a6e3a1" },
+    OilGitModified = { fg = "#f9e2af" },
+    OilGitRenamed = { fg = "#cba6f7" },
+    OilGitDeleted = { fg = "#f38ba8" },
+    OilGitCopied = { fg = "#cba6f7" },
+    OilGitConflict = { fg = "#fab387" },
+    OilGitUntracked = { fg = "#89b4fa" },
+    OilGitIgnored = { fg = "#6c7086" },
+  },
 })
 ```
 
-## Git Status Display
+## Git Status Reference
 
-### File Status
+| Status | File Symbol | Color | Description |
+|--------|-------------|-------|-------------|
+| Added | `+` | Green | Staged new file |
+| Modified | `~` | Yellow | Changed (staged/unstaged) |
+| Renamed | `->` | Purple | Renamed file |
+| Deleted | `D` | Red | Deleted file |
+| Copied | `C` | Purple | Copied file |
+| Conflict | `!` | Orange | Merge conflict |
+| Untracked | `?` | Blue | New untracked file |
+| Ignored | `o` | Gray | Ignored file |
 
-| Status | Symbol | Color | Description |
-|--------|--------|-------|-------------|
-| Added | **+** | Green | Staged new file |
-| Modified | **~** | Yellow | Modified file (staged or unstaged) |
-| Renamed | **->** | Purple | Renamed file |
-| Deleted | **D** | Red | Deleted file (staged or unstaged) |
-| Copied | **C** | Purple | Copied file |
-| Conflict | **!** | Orange | Merge conflict |
-| Untracked | **?** | Blue | New untracked file |
-| Ignored | **o** | Gray | Ignored file |
+### Directory Status Priority
 
-### Directory Status
-
-Directories display the "most significant" status among their contents. The symbol is a colored dot by default (VS Code-style), indicating the directory contains files with changes.
+Directories show the highest-priority status among their contents:
 
 | Priority | Status | Description |
 |----------|--------|-------------|
-| 7 | Conflict | Highest - merge conflicts need immediate attention |
+| 7 | Conflict | Merge conflicts need immediate attention |
 | 6 | Modified | Staged or unstaged changes |
 | 5 | Deleted | Deleted files |
 | 4 | Added | New staged files |
 | 3 | Renamed/Copied | Renamed or copied files |
 | 2 | Untracked | New untracked files |
-| 1 | Ignored | Lowest - only shown if all contents are ignored |
+| 1 | Ignored | Only if all contents are ignored |
 
-**Example:** If a directory contains one modified file and one untracked file, the directory shows as "modified" (higher priority) with the corresponding color.
+## Usage
 
-## Auto-refresh Triggers
+- `:lua require("oil-git").refresh()` - Manual refresh
+- `:checkhealth oil-git` - Check plugin health
 
-The plugin automatically refreshes git status when:
-
-- Entering an oil buffer
-- Buffer content changes (file operations in oil)
-- Focus returns to Neovim (after using external git tools)
-- Window focus changes
-- Terminal closes (LazyGit, fugitive, etc.)
-- Git plugin events (GitSigns, Fugitive)
-
-## Commands
-
-- `:lua require("oil-git").refresh()` - Manually refresh git status
+Status auto-refreshes on buffer enter, file operations, focus changes, and terminal close (LazyGit, etc.).
 
 ## Requirements
 
@@ -173,10 +129,6 @@ The plugin automatically refreshes git status when:
 - [oil.nvim](https://github.com/stevearc/oil.nvim)
 - Git
 
-## Credits
-
-This is an enhanced fork of [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim). Thanks to the original author for the foundation.
-
 ## License
 
-This project is open source and available under the [MIT Licence](LICENSE).
+[MIT](LICENSE)
