@@ -11,10 +11,8 @@ test-coverage:
 	@nvim --headless -u $(MINIMAL_INIT) \
 		-c "lua require('luacov').init('.luacov')" \
 		-c "PlenaryBustedDirectory $(TESTS_DIR) {minimal_init='$(MINIMAL_INIT)', sequential=true}"
-	@luacov -r lcov
-	@mkdir -p coverage
-	@mv luacov.report.out coverage/lcov.info
-	@echo "Coverage report generated at coverage/lcov.info"
+	@luacov
+	@echo "Coverage report generated at luacov.report.out"
 
 test-file:
 	@nvim --headless -u $(MINIMAL_INIT) \
