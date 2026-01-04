@@ -3,7 +3,6 @@
 <div align="center">
 
 [![Tests](https://github.com/malewicz1337/oil-git.nvim/actions/workflows/test.yml/badge.svg)](https://github.com/malewicz1337/oil-git.nvim/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/malewicz1337/oil-git.nvim/branch/main/graph/badge.svg)](https://codecov.io/gh/malewicz1337/oil-git.nvim)
 [![Neovim](https://img.shields.io/badge/Neovim-0.8+-blueviolet.svg?style=flat&logo=neovim)](https://neovim.io)
 [![Lua](https://img.shields.io/badge/Lua-blue.svg?style=flat&logo=lua)](https://www.lua.org)
 

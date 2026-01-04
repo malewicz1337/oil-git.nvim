@@ -1,4 +1,4 @@
-.PHONY: test test-coverage test-file lint luacheck format check setup clean
+.PHONY: test test-file lint luacheck format check setup
 
 TESTS_DIR := tests/plenary
 MINIMAL_INIT := tests/minimal_init.lua
@@ -6,12 +6,6 @@ MINIMAL_INIT := tests/minimal_init.lua
 test:
 	@nvim --headless -u $(MINIMAL_INIT) \
 		-c "PlenaryBustedDirectory $(TESTS_DIR) {minimal_init='$(MINIMAL_INIT)', sequential=true}"
-
-test-coverage:
-	@LUACOV=1 nvim --headless -u $(MINIMAL_INIT) \
-		-c "PlenaryBustedDirectory $(TESTS_DIR) {minimal_init='$(MINIMAL_INIT)', sequential=true}"
-	@luacov
-	@echo "Coverage report generated at luacov.report.out"
 
 test-file:
 	@nvim --headless -u $(MINIMAL_INIT) \
@@ -35,7 +29,3 @@ check: format luacheck test
 setup:
 	@git config core.hooksPath .githooks
 	@echo "Git hooks configured to use .githooks/"
-
-clean:
-	@rm -rf luacov.stats.out luacov.report.out coverage/
-	@echo "Cleaned coverage files"

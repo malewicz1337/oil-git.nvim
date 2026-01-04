@@ -52,9 +52,6 @@ jobs:
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
 
-      - name: Install LuaCov
-        run: luarocks install luacov
-
       - name: Install plenary.nvim
         run: |
           mkdir -p ~/.local/share/nvim/site/pack/vendor/start
@@ -70,23 +67,7 @@ jobs:
           git config --global user.name "Test"
           git config --global init.defaultBranch main
 
-      - name: Run tests with coverage
-        env:
-          LUACOV: 1
+      - name: Run tests
         run: |
           nvim --headless -u tests/minimal_init.lua \
             -c "PlenaryBustedDirectory tests/plenary/ {minimal_init='tests/minimal_init.lua', sequential=true}"
-
-      - name: Generate coverage report
-        run: luacov
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./luacov.report.out
-          flags: unittests
-          name: oil-git-coverage
-          fail_ci_if_error: false
-          verbose: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

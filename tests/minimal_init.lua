@@ -1,12 +1,6 @@
 local root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h")
 vim.opt.rtp:prepend(root)
 
-if os.getenv("LUACOV") then
-	pcall(function()
-		require("luacov").init(root .. "/.luacov")
-	end)
-end
-
 package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 
 local function add_plugin(name)
