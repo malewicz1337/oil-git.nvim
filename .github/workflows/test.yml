@@ -80,9 +80,9 @@ jobs:
 
       - name: Generate coverage report
         run: |
-          luacov
+          luacov -r lcov
           mkdir -p coverage
-          luacov-reporter-lcov -o coverage/lcov.info
+          mv luacov.report.out coverage/lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
