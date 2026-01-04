@@ -15,7 +15,6 @@ local function get_relative_path(filepath, git_root)
 		return nil
 	end
 
-	-- Verify filepath starts with git_root
 	if filepath:sub(1, #git_root) ~= git_root then
 		return nil
 	end

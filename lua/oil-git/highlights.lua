@@ -91,7 +91,6 @@ function M.on_buf_delete(bufnr)
 		bufnr = bufnr.buf
 	end
 
-	-- Cancel any pending timer for this buffer
 	if pending_timers[bufnr] then
 		vim.fn.timer_stop(pending_timers[bufnr])
 		pending_timers[bufnr] = nil
@@ -107,7 +106,6 @@ local function apply_to_buffer(
 	status_trie,
 	git_root
 )
-	-- Validate buffer is still valid before proceeding
 	if not vim.api.nvim_buf_is_valid(bufnr) then
 		return
 	end
@@ -314,13 +312,11 @@ function M.apply_debounced()
 		return
 	end
 
-	-- Cancel existing timer for this buffer
 	if pending_timers[bufnr] then
 		vim.fn.timer_stop(pending_timers[bufnr])
 		pending_timers[bufnr] = nil
 	end
 
-	-- Enforce timer limit by clearing all timers when limit reached
 	local timer_count = vim.tbl_count(pending_timers)
 	if timer_count >= MAX_PENDING_TIMERS then
 		for buf, timer in pairs(pending_timers) do
@@ -346,7 +342,6 @@ function M.apply_immediate()
 		return
 	end
 
-	-- Cancel pending timer for this buffer
 	if pending_timers[bufnr] then
 		vim.fn.timer_stop(pending_timers[bufnr])
 		pending_timers[bufnr] = nil

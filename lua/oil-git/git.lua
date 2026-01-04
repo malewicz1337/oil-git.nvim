@@ -45,7 +45,6 @@ local function parse_output(output, git_root)
 	local status_trie = trie.create_node()
 
 	for line in output:gmatch("[^\r\n]+") do
-		-- Validate minimum line length (2 status chars + space + 1 char path)
 		if #line < 4 then
 			goto continue
 		end
@@ -53,7 +52,6 @@ local function parse_output(output, git_root)
 		local status_code = line:sub(1, 2)
 		local filepath = line:sub(4)
 
-		-- Skip empty filepaths
 		if not filepath or filepath == "" then
 			goto continue
 		end

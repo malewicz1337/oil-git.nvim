@@ -1,4 +1,4 @@
-.PHONY: test test-coverage test-file lint format clean
+.PHONY: test test-coverage test-file lint luacheck format check setup clean
 
 TESTS_DIR := tests/plenary
 MINIMAL_INIT := tests/minimal_init.lua
@@ -22,11 +22,22 @@ test-file:
 
 lint:
 	@stylua --check lua/ tests/
-	@echo "Linted lua/ and tests/"
+	@echo "StyLua check passed"
+
+luacheck:
+	@luacheck lua/ tests/
+	@echo "Luacheck passed"
 
 format:
 	@stylua lua/ tests/
 	@echo "Formatted lua/ and tests/"
+
+check: format luacheck test
+	@echo "All checks passed"
+
+setup:
+	@git config core.hooksPath .githooks
+	@echo "Git hooks configured to use .githooks/"
 
 clean:
 	@rm -rf luacov.stats.out luacov.report.out coverage/

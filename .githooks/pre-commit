@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# Pre-commit hook for oil-git.nvim
+# Runs format check, luacheck, and tests before allowing commit
+# Fails fast on first error
+
+set -e
+
+echo "Running pre-commit checks..."
+
+echo ""
+echo "==> Checking formatting (stylua)..."
+stylua --check lua/ tests/
+
+echo ""
+echo "==> Running luacheck..."
+luacheck lua/ tests/
+
+echo ""
+echo "==> Running tests..."
+make test
+
+echo ""
+echo "All pre-commit checks passed!"

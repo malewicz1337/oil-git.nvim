@@ -56,17 +56,14 @@ describe("highlights", function()
 			local bufnr = vim.api.nvim_create_buf(false, true)
 			vim.api.nvim_set_current_buf(bufnr)
 
-			-- Should not error even without prior apply
 			assert.has_no.errors(function()
 				highlights.clear(bufnr)
 			end)
 
-			-- Should not error with table argument (autocmd style)
 			assert.has_no.errors(function()
 				highlights.clear({ buf = bufnr })
 			end)
 
-			-- Should not error with invalid buffer
 			vim.api.nvim_buf_delete(bufnr, { force = true })
 			assert.has_no.errors(function()
 				highlights.clear(bufnr)
