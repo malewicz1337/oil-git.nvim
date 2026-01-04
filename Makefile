@@ -8,8 +8,7 @@ test:
 		-c "PlenaryBustedDirectory $(TESTS_DIR) {minimal_init='$(MINIMAL_INIT)', sequential=true}"
 
 test-coverage:
-	@nvim --headless -u $(MINIMAL_INIT) \
-		-c "lua require('luacov').init('.luacov')" \
+	@LUACOV=1 nvim --headless -u $(MINIMAL_INIT) \
 		-c "PlenaryBustedDirectory $(TESTS_DIR) {minimal_init='$(MINIMAL_INIT)', sequential=true}"
 	@luacov
 	@echo "Coverage report generated at luacov.report.out"

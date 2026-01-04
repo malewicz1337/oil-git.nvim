@@ -70,10 +70,11 @@ jobs:
           git config --global user.name "Test"
           git config --global init.defaultBranch main
 
-      - name: Run tests
+      - name: Run tests with coverage
+        env:
+          LUACOV: 1
         run: |
           nvim --headless -u tests/minimal_init.lua \
-            -c "lua require('luacov').init('.luacov')" \
             -c "PlenaryBustedDirectory tests/plenary/ {minimal_init='tests/minimal_init.lua', sequential=true}"
 
       - name: Generate coverage report

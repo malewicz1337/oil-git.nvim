@@ -13,4 +13,6 @@ return {
 	reportfile = "luacov.report.out",
 	runreport = false,
 	deletestats = false,
+
+	savestepsize = 2,
 }
