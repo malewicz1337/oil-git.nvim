@@ -14,8 +14,8 @@
 
 Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) - colors file/directory names and adds status symbols.
 
-> [!IMPORTANT]
-> Enhanced fork of [benomahony/oil-git.nvim](https://github.com/benomahony/oil-git.nvim) with async git status, directory highlighting, debouncing, and additional status types.
+> [!NOTE]
+> **malewicz1337/oil-git.nvim** is the successor to `benomahony/oil-git.nvim`. It was created to provide a maintained, high-performance alternative with async support, directory highlighting, and debouncing.
 
 <table>
   <tr>
@@ -26,9 +26,10 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) - co
 
 ## Features
 
-- **File & directory highlighting** - Colors based on git status
-- **Status symbols** - Customizable symbols at end of lines
-- **Async & debounced** - Non-blocking with auto-refresh on git changes
+- **File & directory highlighting** - Instant visual feedback based on git status.
+- **Status symbols** - Customizable symbols (added, modified, deleted, etc.) at the end of lines.
+- **Async & debounced** - Non-blocking execution ensures **zero lag even in massive repositories** with deep directory structures.
+- **Smart Refresh** - Auto-updates on buffer entry, file operations, and after closing terminal toggles (like LazyGit).
 
 ## Installation
 
