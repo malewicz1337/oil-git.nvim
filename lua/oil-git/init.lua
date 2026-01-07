@@ -47,9 +47,17 @@ local function setup_autocmds()
 		end,
 	})
 
+	local cfg = config.get()
+	local user_patterns = { "FugitiveChanged", "LazyGitClosed" }
+	if not cfg.ignore_gitsigns_update then
+		table.insert(user_patterns, "GitSignsUpdate")
+	else
+		util.debug_log("minimal", "GitSignsUpdate events ignored (config)")
+	end
+
 	vim.api.nvim_create_autocmd("User", {
 		group = group,
-		pattern = { "FugitiveChanged", "GitSignsUpdate", "LazyGitClosed" },
+		pattern = user_patterns,
 		callback = function()
 			git.invalidate_cache()
 			if vim.bo.filetype == "oil" then

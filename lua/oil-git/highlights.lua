@@ -11,6 +11,7 @@ local git = require("oil-git.git")
 local pending_timers = {} -- { [bufnr] = timer_id }
 local MAX_PENDING_TIMERS = 10
 local buffer_ns_ids = {}
+local buffer_highlight_hashes = {} -- { [bufnr] = sha256_hash }
 local signcolumn_cache = nil
 
 local function get_namespace(suffix)
@@ -84,6 +85,7 @@ function M.clear(bufnr)
 		pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
 		buffer_ns_ids[bufnr] = nil
 	end
+	buffer_highlight_hashes[bufnr] = nil
 end
 
 function M.on_buf_delete(bufnr)
@@ -97,6 +99,7 @@ function M.on_buf_delete(bufnr)
 	end
 
 	buffer_ns_ids[bufnr] = nil
+	buffer_highlight_hashes[bufnr] = nil
 end
 
 local function apply_to_buffer(
@@ -136,12 +139,18 @@ local function apply_to_buffer(
 	local file_symbols = cfg.symbols.file
 	local dir_symbols = cfg.symbols.directory
 
-	local ns_id = get_namespace(bufnr)
+	-- Phase 1: Single loop to collect highlights and build hash
+	local highlights = {}
+	local highlights_idx = 0
+	-- Include changedtick to detect buffer redraws (e.g., oil refresh)
+	local changedtick = vim.api.nvim_buf_get_changedtick(bufnr)
+	local hash_parts = { current_dir, tostring(changedtick) }
+	local hash_idx = 2
 
-	pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
-
-	local highlight_count = 0
-	local symbol_count = 0
+	-- Pre-allocate highlights table
+	for i = 1, line_count do
+		highlights[i] = nil
+	end
 
 	for i = 1, line_count do
 		local line = lines[i]
@@ -153,17 +162,18 @@ local function apply_to_buffer(
 		local status_code = nil
 		local symbols = nil
 		local entry_name = entry.name
+		local entry_path = current_dir .. entry_name
 		local is_directory = false
 		local show_highlight = false
 		local show_symbol = false
 
 		if entry.type == constants.ENTRY_TYPES.FILE then
 			symbols = file_symbols
-			status_code = git_status[current_dir .. entry_name]
+			status_code = git_status[entry_path]
 			if not status_code then
 				status_code = trie.lookup(
 					status_trie,
-					current_dir .. entry_name,
+					entry_path,
 					git_root,
 					not show_ignored_files
 				)
@@ -184,83 +194,117 @@ local function apply_to_buffer(
 			if show_highlight or show_symbol then
 				status_code = trie.lookup(
 					status_trie,
-					current_dir .. entry_name,
+					entry_path,
 					git_root,
 					not show_ignored_directories
 				)
 			end
 		end
 
+		-- Build hash part (no line index - reordering won't trigger rehighlight)
+		hash_idx = hash_idx + 1
+		hash_parts[hash_idx] =
+			string.format("%s:%s", entry_name, status_code or "")
+
+		-- Collect highlight data if applicable
 		if status_code and symbols then
 			local hl_group, symbol = status_mapper.map(status_code, symbols)
 
 			if hl_group then
 				local name_start = line:find(entry_name, 1, true)
 				if name_start then
-					if show_highlight then
-						local highlight_len = #entry_name
+					local highlight_len = #entry_name
 
-						if is_directory then
-							local slash_pos = name_start + highlight_len
-							if line:sub(slash_pos, slash_pos) == "/" then
-								highlight_len = highlight_len + 1
-							end
-						end
-
-						local start_col = name_start - 1
-						local end_col = start_col + highlight_len
-						local extmark_ok = pcall(
-							vim.api.nvim_buf_set_extmark,
-							bufnr,
-							ns_id,
-							i - 1,
-							start_col,
-							{
-								end_col = end_col,
-								hl_group = hl_group,
-							}
-						)
-						if extmark_ok then
-							highlight_count = highlight_count + 1
+					if is_directory then
+						local slash_pos = name_start + highlight_len
+						if line:sub(slash_pos, slash_pos) == "/" then
+							highlight_len = highlight_len + 1
 						end
 					end
 
-					if show_symbol and symbol then
-						if use_signcolumn then
-							pcall(
-								vim.api.nvim_buf_set_extmark,
-								bufnr,
-								ns_id,
-								i - 1,
-								0,
-								{
-									sign_text = symbol:sub(1, 2),
-									sign_hl_group = hl_group,
-								}
-							)
-						else
-							pcall(
-								vim.api.nvim_buf_set_extmark,
-								bufnr,
-								ns_id,
-								i - 1,
-								0,
-								{
-									virt_text = {
-										{ " " .. symbol, hl_group },
-									},
-									virt_text_pos = "eol",
-									hl_mode = "combine",
-								}
-							)
-						end
-						symbol_count = symbol_count + 1
-					end
+					highlights_idx = highlights_idx + 1
+					highlights[highlights_idx] = {
+						line_idx = i - 1,
+						start_col = name_start - 1,
+						end_col = name_start - 1 + highlight_len,
+						hl_group = hl_group,
+						symbol = symbol,
+						show_highlight = show_highlight,
+						show_symbol = show_symbol,
+					}
 				end
 			end
 		end
 
 		::continue::
+	end
+
+	-- Phase 2: Compute hash and check if highlights need updating
+	local new_hash = vim.fn.sha256(table.concat(hash_parts, "|"))
+	if buffer_highlight_hashes[bufnr] == new_hash then
+		util.debug_log("verbose", "Highlight hash unchanged, skipping reapply")
+		return
+	end
+	buffer_highlight_hashes[bufnr] = new_hash
+
+	-- Phase 3: Apply highlights from collected data
+	local ns_id = get_namespace(bufnr)
+	pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
+
+	local highlight_count = 0
+	local symbol_count = 0
+
+	for i = 1, highlights_idx do
+		local hl = highlights[i]
+
+		if hl.show_highlight then
+			local extmark_ok = pcall(
+				vim.api.nvim_buf_set_extmark,
+				bufnr,
+				ns_id,
+				hl.line_idx,
+				hl.start_col,
+				{
+					end_col = hl.end_col,
+					hl_group = hl.hl_group,
+				}
+			)
+			if extmark_ok then
+				highlight_count = highlight_count + 1
+			end
+		end
+
+		if hl.show_symbol and hl.symbol then
+			if use_signcolumn then
+				pcall(
+					vim.api.nvim_buf_set_extmark,
+					bufnr,
+					ns_id,
+					hl.line_idx,
+					0,
+					{
+						sign_text = hl.symbol:sub(1, 2),
+						sign_hl_group = hl.hl_group,
+					}
+				)
+			else
+				pcall(
+					vim.api.nvim_buf_set_extmark,
+					bufnr,
+					ns_id,
+					hl.line_idx,
+					0,
+					{
+						virt_text = {
+							{ " " .. hl.symbol, hl.hl_group },
+						},
+						virt_text_pos = "eol",
+						hl_mode = "combine",
+					}
+				)
+			end
+			symbol_count = symbol_count + 1
+		end
 	end
 
 	buffer_ns_ids[bufnr] = ns_id

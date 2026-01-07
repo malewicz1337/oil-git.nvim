@@ -97,6 +97,54 @@ describe("init", function()
 
 			assert.equals(first_count, second_count)
 		end)
+
+		it(
+			"should include GitSignsUpdate in User autocmd by default",
+			function()
+				oil_git.setup({})
+
+				local autocmds = vim.api.nvim_get_autocmds({
+					group = "OilGitStatus",
+					event = "User",
+				})
+
+				local has_gitsigns = false
+				for _, ac in ipairs(autocmds) do
+					if ac.pattern and ac.pattern:find("GitSignsUpdate") then
+						has_gitsigns = true
+						break
+					end
+				end
+				assert.is_true(
+					has_gitsigns,
+					"GitSignsUpdate should be in User autocmd patterns"
+				)
+			end
+		)
+
+		it(
+			"should exclude GitSignsUpdate when ignore_gitsigns_update is true",
+			function()
+				oil_git.setup({ ignore_gitsigns_update = true })
+
+				local autocmds = vim.api.nvim_get_autocmds({
+					group = "OilGitStatus",
+					event = "User",
+				})
+
+				local has_gitsigns = false
+				for _, ac in ipairs(autocmds) do
+					if ac.pattern and ac.pattern:find("GitSignsUpdate") then
+						has_gitsigns = true
+						break
+					end
+				end
+				assert.is_false(
+					has_gitsigns,
+					"GitSignsUpdate should NOT be in User autocmd patterns"
+				)
+			end
+		)
 	end)
 
 	describe("highlight groups", function()

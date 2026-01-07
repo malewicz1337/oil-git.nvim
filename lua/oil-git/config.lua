@@ -11,6 +11,7 @@ local default_config = {
 	show_ignored_files = false,
 	show_ignored_directories = false,
 	symbol_position = "eol",
+	ignore_gitsigns_update = false,
 	debug = false,
 	symbols = {
 		file = {

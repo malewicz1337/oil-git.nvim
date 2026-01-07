@@ -68,6 +68,7 @@ require("oil-git").setup({
   show_ignored_files = false,       -- Show ignored file status
   show_ignored_directories = false, -- Show ignored directory status
   symbol_position = "eol",  -- "eol", "signcolumn", or "none"
+  ignore_gitsigns_update = false,   -- Ignore GitSignsUpdate events (fallback for flickering)
   debug = false,            -- false, "minimal", or "verbose"
 
   symbols = {
