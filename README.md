@@ -40,6 +40,35 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) - co
 ```
 
 <details>
+<summary>With custom options (as oil.nvim dependency)</summary>
+
+This is how I use the plugin in my config:
+
+```lua
+{
+  "stevearc/oil.nvim",
+  dependencies = {
+    { "echasnovski/mini.icons", opts = {} },
+    {
+      "malewicz1337/oil-git.nvim",
+      dependencies = { "stevearc/oil.nvim" },
+      opts = {
+        show_file_highlights = true,
+        show_directory_highlights = false,
+        show_ignored_files = true,
+      },
+    },
+  },
+  config = function()
+    require("oil").setup({
+      ...
+    })
+  end,
+}
+```
+</details>
+
+<details>
 <summary>Other plugin managers</summary>
 
 **Packer:**
