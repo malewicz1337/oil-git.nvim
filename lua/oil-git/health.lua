@@ -4,6 +4,7 @@ local start = vim.health.start or vim.health.report_start
 local ok = vim.health.ok or vim.health.report_ok
 local warn = vim.health.warn or vim.health.report_warn
 local error = vim.health.error or vim.health.report_error
+local info = vim.health.info or vim.health.report_info
 
 function M.check()
 	start("oil-git.nvim")
@@ -36,6 +37,18 @@ function M.check()
 		end
 	else
 		error("git is not installed or not in PATH")
+	end
+
+	local git = require("oil-git.git")
+	local cwd = vim.fn.getcwd()
+	local root, method = git.get_root(cwd)
+	if root then
+		ok("Git root detected: " .. root)
+		if method then
+			info("Detection method: " .. method)
+		end
+	else
+		info("Current directory is not a git repository")
 	end
 
 	local config = require("oil-git.config")

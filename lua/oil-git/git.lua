@@ -24,10 +24,89 @@ end
 
 function M.get_root(dir)
 	local git_dir = vim.fn.finddir(".git", dir .. ";")
-	if git_dir == "" then
-		return nil
+	if git_dir ~= "" then
+		return vim.fn.fnamemodify(git_dir, ":p:h:h"), "finddir"
 	end
-	return vim.fn.fnamemodify(git_dir, ":p:h:h")
+
+	local result =
+		vim.fn.system({ "git", "-C", dir, "rev-parse", "--show-toplevel" })
+	if vim.v.shell_error == 0 and result then
+		result = result:gsub("[\r\n]+$", "")
+		if result ~= "" then
+			return path.git_to_os(result), "git"
+		end
+	end
+
+	return nil, nil
+end
+
+function M.get_root_async(dir, callback)
+	local git_dir = vim.fn.finddir(".git", dir .. ";")
+	if git_dir ~= "" then
+		local root = vim.fn.fnamemodify(git_dir, ":p:h:h")
+		util.debug_log("verbose", "Git root found via finddir: %s", root)
+		callback(root)
+		return
+	end
+
+	util.debug_log("verbose", "finddir failed, trying git command for: %s", dir)
+
+	local stdout = uv.new_pipe(false)
+	local output_parts = {}
+
+	local handle
+	handle = uv.spawn("git", {
+		args = { "rev-parse", "--show-toplevel" },
+		cwd = dir,
+		stdio = { nil, stdout, nil },
+	}, function(code)
+		stdout:read_stop()
+		stdout:close()
+		if handle then
+			handle:close()
+		end
+
+		if code ~= 0 then
+			util.debug_log(
+				"verbose",
+				"git rev-parse failed with code: %d",
+				code
+			)
+			vim.schedule(function()
+				callback(nil)
+			end)
+			return
+		end
+
+		local output = table.concat(output_parts):gsub("[\r\n]+$", "")
+		if output == "" then
+			vim.schedule(function()
+				callback(nil)
+			end)
+			return
+		end
+
+		local root = path.git_to_os(output)
+		util.debug_log("verbose", "Git root found via git command: %s", root)
+		vim.schedule(function()
+			callback(root)
+		end)
+	end)
+
+	if not handle then
+		util.debug_log("minimal", "Failed to spawn git rev-parse process")
+		stdout:close()
+		vim.schedule(function()
+			callback(nil)
+		end)
+		return
+	end
+
+	stdout:read_start(function(_, data)
+		if data then
+			table.insert(output_parts, data)
+		end
+	end)
 end
 
 local function parse_output(output, git_root)
@@ -83,86 +162,91 @@ local function parse_output(output, git_root)
 end
 
 function M.get_status_async(dir, callback)
-	local git_root = M.get_root(dir)
-	if not git_root then
-		util.debug_log("verbose", "No git root found for: %s", dir)
-		callback({}, nil, nil)
-		return
-	end
+	M.get_root_async(dir, function(git_root)
+		if not git_root then
+			util.debug_log("verbose", "No git root found for: %s", dir)
+			callback({}, nil, nil)
+			return
+		end
 
-	local now = uv.now()
-	if
-		cache.git_root == git_root
-		and (now - cache.timestamp) < CACHE_TTL_MS
-	then
+		local now = uv.now()
+		if
+			cache.git_root == git_root
+			and (now - cache.timestamp) < CACHE_TTL_MS
+		then
+			util.debug_log(
+				"verbose",
+				"Cache hit for: %s (age: %dms)",
+				git_root,
+				now - cache.timestamp
+			)
+			callback(cache.status, cache.status_trie, cache.git_root)
+			return
+		end
+
 		util.debug_log(
 			"verbose",
-			"Cache hit for: %s (age: %dms)",
-			git_root,
-			now - cache.timestamp
+			"Cache miss, fetching git status for: %s",
+			git_root
 		)
-		callback(cache.status, cache.status_trie, cache.git_root)
-		return
-	end
 
-	util.debug_log(
-		"verbose",
-		"Cache miss, fetching git status for: %s",
-		git_root
-	)
+		local stdout = uv.new_pipe(false)
+		local output_parts = {}
 
-	local stdout = uv.new_pipe(false)
-	local output_parts = {}
+		local handle
+		handle = uv.spawn("git", {
+			args = { "status", "--porcelain", "--ignored" },
+			cwd = git_root,
+			stdio = { nil, stdout, nil },
+		}, function(code)
+			stdout:read_stop()
+			stdout:close()
+			handle:close()
 
-	local handle
-	handle = uv.spawn("git", {
-		args = { "status", "--porcelain", "--ignored" },
-		cwd = git_root,
-		stdio = { nil, stdout, nil },
-	}, function(code)
-		stdout:read_stop()
-		stdout:close()
-		handle:close()
+			if code ~= 0 then
+				util.debug_log(
+					"minimal",
+					"Git command failed with code: %d",
+					code
+				)
+				vim.schedule(function()
+					callback({}, nil, nil)
+				end)
+				return
+			end
 
-		if code ~= 0 then
-			util.debug_log("minimal", "Git command failed with code: %d", code)
+			local output = table.concat(output_parts)
+			local status, status_trie = parse_output(output, git_root)
+
+			cache.git_root = git_root
+			cache.timestamp = uv.now()
+			cache.status = status
+			cache.status_trie = status_trie
+
+			util.debug_log(
+				"verbose",
+				"Git status returned %d files, cached",
+				vim.tbl_count(status)
+			)
+			vim.schedule(function()
+				callback(status, status_trie, git_root)
+			end)
+		end)
+
+		if not handle then
+			util.debug_log("minimal", "Failed to spawn git process")
+			stdout:close()
 			vim.schedule(function()
 				callback({}, nil, nil)
 			end)
 			return
 		end
 
-		local output = table.concat(output_parts)
-		local status, status_trie = parse_output(output, git_root)
-
-		cache.git_root = git_root
-		cache.timestamp = uv.now()
-		cache.status = status
-		cache.status_trie = status_trie
-
-		util.debug_log(
-			"verbose",
-			"Git status returned %d files, cached",
-			vim.tbl_count(status)
-		)
-		vim.schedule(function()
-			callback(status, status_trie, git_root)
+		stdout:read_start(function(_, data)
+			if data then
+				table.insert(output_parts, data)
+			end
 		end)
-	end)
-
-	if not handle then
-		util.debug_log("minimal", "Failed to spawn git process")
-		stdout:close()
-		vim.schedule(function()
-			callback({}, nil, nil)
-		end)
-		return
-	end
-
-	stdout:read_start(function(_, data)
-		if data then
-			table.insert(output_parts, data)
-		end
 	end)
 end
 

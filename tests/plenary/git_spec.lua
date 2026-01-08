@@ -48,6 +48,124 @@ describe("git", function()
 
 			helpers.cleanup(repo_dir)
 		end)
+
+		it("should return detection method", function()
+			local repo_dir = helpers.create_temp_git_repo()
+
+			local result, method = git.get_root(repo_dir)
+			assert.is_not_nil(result)
+			assert.is_not_nil(method)
+			assert.is_true(method == "finddir" or method == "git")
+
+			helpers.cleanup(repo_dir)
+		end)
+
+		it("should return nil method for non-git directory", function()
+			local tmp_dir = vim.fn.tempname()
+			vim.fn.mkdir(tmp_dir, "p")
+
+			local result, method = git.get_root(tmp_dir)
+			assert.is_nil(result)
+			assert.is_nil(method)
+
+			helpers.cleanup(tmp_dir)
+		end)
+	end)
+
+	describe("get_root_async", function()
+		it("should find git root asynchronously", function()
+			local repo_dir = helpers.create_temp_git_repo()
+
+			local done = false
+			local result_root
+
+			git.get_root_async(repo_dir, function(root)
+				result_root = root
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			assert.is_not_nil(result_root)
+			local normalized_repo = repo_dir:gsub("[/\\]$", "")
+			local normalized_result = result_root:gsub("[/\\]$", "")
+			assert.equals(normalized_repo, normalized_result)
+
+			helpers.cleanup(repo_dir)
+		end)
+
+		it("should return nil for non-git directory", function()
+			local tmp_dir = vim.fn.tempname()
+			vim.fn.mkdir(tmp_dir, "p")
+
+			local done = false
+			local result_root
+
+			git.get_root_async(tmp_dir, function(root)
+				result_root = root
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			assert.is_nil(result_root)
+
+			helpers.cleanup(tmp_dir)
+		end)
+
+		it("should find git root from subdirectory", function()
+			local repo_dir = helpers.create_temp_git_repo()
+			local sub_dir = repo_dir .. "/src/components"
+			vim.fn.mkdir(sub_dir, "p")
+
+			local done = false
+			local result_root
+
+			git.get_root_async(sub_dir, function(root)
+				result_root = root
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			assert.is_not_nil(result_root)
+			local normalized_repo = repo_dir:gsub("[/\\]$", "")
+			local normalized_result = result_root:gsub("[/\\]$", "")
+			assert.equals(normalized_repo, normalized_result)
+
+			helpers.cleanup(repo_dir)
+		end)
+
+		it("should handle rapid consecutive calls", function()
+			local repo_dir = helpers.create_temp_git_repo()
+
+			local call_count = 0
+			local results = {}
+
+			for _ = 1, 3 do
+				git.get_root_async(repo_dir, function(root)
+					call_count = call_count + 1
+					table.insert(results, root)
+				end)
+			end
+
+			helpers.wait_for(function()
+				return call_count >= 3
+			end)
+
+			assert.equals(3, call_count)
+			for _, root in ipairs(results) do
+				assert.is_not_nil(root)
+			end
+
+			helpers.cleanup(repo_dir)
+		end)
 	end)
 
 	describe("get_status_async", function()
@@ -1036,6 +1154,77 @@ describe("git", function()
 			end, 2000)
 
 			assert.same({}, result_status)
+		end)
+	end)
+
+	describe("Windows compatibility", function()
+		it("should normalize Windows-style paths from git output", function()
+			local path_module = require("oil-git.path")
+			local orig_is_windows = path_module.is_windows
+
+			path_module.is_windows = true
+
+			local git_output = "C:/Users/newholder/projects/my-repo"
+			local normalized = path_module.git_to_os(git_output)
+
+			assert.equals("C:\\Users\\newholder\\projects\\my-repo", normalized)
+
+			path_module.is_windows = orig_is_windows
+		end)
+
+		it("should strip trailing newlines from git output", function()
+			local test_cases = {
+				{ input = "C:/Users/test\n", expected = "C:/Users/test" },
+				{ input = "C:/Users/test\r\n", expected = "C:/Users/test" },
+				{ input = "C:/Users/test\n\n", expected = "C:/Users/test" },
+				{ input = "/home/user/repo\n", expected = "/home/user/repo" },
+			}
+
+			for _, tc in ipairs(test_cases) do
+				local result = tc.input:gsub("[\r\n]+$", "")
+				assert.equals(tc.expected, result)
+			end
+		end)
+
+		it("should handle drive letter paths on mocked Windows", function()
+			local path_module = require("oil-git.path")
+			local orig_is_windows = path_module.is_windows
+
+			path_module.is_windows = true
+
+			local test_cases = {
+				{
+					input = "C:/Users/test/project",
+					expected = "C:\\Users\\test\\project",
+				},
+				{
+					input = "D:/Work/repos/my-app",
+					expected = "D:\\Work\\repos\\my-app",
+				},
+				{
+					input = "E:/",
+					expected = "E:\\",
+				},
+			}
+
+			for _, tc in ipairs(test_cases) do
+				local result = path_module.git_to_os(tc.input)
+				assert.equals(tc.expected, result)
+			end
+
+			path_module.is_windows = orig_is_windows
+		end)
+
+		it("should handle network paths on mocked Windows", function()
+			local path_module = require("oil-git.path")
+			local orig_is_windows = path_module.is_windows
+
+			path_module.is_windows = true
+
+			local result = path_module.git_to_os("//server/share/project")
+			assert.equals("\\\\server\\share\\project", result)
+
+			path_module.is_windows = orig_is_windows
 		end)
 	end)
 end)

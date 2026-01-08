@@ -113,6 +113,59 @@ describe("path", function()
 		end)
 	end)
 
+	describe("git_to_os with mocked Windows", function()
+		it("should convert forward slashes on mocked Windows", function()
+			local orig_is_windows = path.is_windows
+
+			path.is_windows = true
+			local result = path.git_to_os("C:/Users/test/project")
+			assert.equals("C:\\Users\\test\\project", result)
+
+			path.is_windows = orig_is_windows
+		end)
+
+		it("should not convert on mocked Unix", function()
+			local orig_is_windows = path.is_windows
+
+			path.is_windows = false
+			local result = path.git_to_os("C:/Users/test/project")
+			assert.equals("C:/Users/test/project", result)
+
+			path.is_windows = orig_is_windows
+		end)
+
+		it("should handle UNC paths on mocked Windows", function()
+			local orig_is_windows = path.is_windows
+
+			path.is_windows = true
+			local result = path.git_to_os("//server/share/folder")
+			assert.equals("\\\\server\\share\\folder", result)
+
+			path.is_windows = orig_is_windows
+		end)
+
+		it("should handle mixed slashes on mocked Windows", function()
+			local orig_is_windows = path.is_windows
+
+			path.is_windows = true
+			local result = path.git_to_os("C:/Users\\test/project")
+			assert.equals("C:\\Users\\test\\project", result)
+
+			path.is_windows = orig_is_windows
+		end)
+
+		it("should handle git rev-parse output on mocked Windows", function()
+			local orig_is_windows = path.is_windows
+
+			path.is_windows = true
+			local git_output = "C:/Users/newholder/projects/my-repo"
+			local normalized = path.git_to_os(git_output)
+			assert.equals("C:\\Users\\newholder\\projects\\my-repo", normalized)
+
+			path.is_windows = orig_is_windows
+		end)
+	end)
+
 	describe("remove_trailing_slash", function()
 		it("should remove trailing slashes", function()
 			assert.equals("/repo/dir", path.remove_trailing_slash("/repo/dir/"))
