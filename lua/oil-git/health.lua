@@ -49,6 +49,19 @@ function M.check()
 	else
 		warn("Using default configuration (setup() not called yet)")
 	end
+
+	local oil_git = require("oil-git")
+	if oil_git._is_initialized() then
+		ok("Plugin initialized successfully")
+	else
+		if oil_git._is_configured() then
+			warn("Plugin configured but not initialized (waiting for oil.nvim)")
+		else
+			warn(
+				"Plugin not yet initialized (will initialize when oil buffer opens)"
+			)
+		end
+	end
 end
 
 return M

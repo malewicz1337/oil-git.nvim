@@ -5,6 +5,7 @@ describe("init", function()
 	before_each(function()
 		helpers.reset_oil_git_modules()
 		pcall(vim.api.nvim_del_augroup_by_name, "OilGitStatus")
+		pcall(vim.api.nvim_del_augroup_by_name, "OilGitDeferredInit")
 		oil_git = require("oil-git")
 	end)
 
@@ -181,6 +182,142 @@ describe("init", function()
 			assert.has_no.errors(function()
 				oil_git.refresh()
 			end)
+		end)
+	end)
+
+	describe("deferred initialization", function()
+		it("should return true when already initialized", function()
+			oil_git.setup({})
+			local result = oil_git.init()
+			assert.is_true(result)
+		end)
+
+		it("should return true when oil is available", function()
+			if pcall(require, "oil") then
+				local result = oil_git.init()
+				assert.is_true(result)
+			end
+		end)
+
+		it("should expose _is_initialized correctly", function()
+			assert.is_false(oil_git._is_initialized())
+			oil_git.setup({})
+			assert.is_true(oil_git._is_initialized())
+		end)
+
+		it(
+			"should return false and create deferred autocmds when oil unavailable",
+			function()
+				helpers.reset_oil_git_modules()
+
+				local util = require("oil-git.util")
+				local original = util.is_oil_available
+				util.is_oil_available = function()
+					return false
+				end
+
+				oil_git = require("oil-git")
+
+				local result = oil_git.init()
+				assert.is_false(result)
+				assert.is_false(oil_git._is_initialized())
+
+				local autocmds =
+					vim.api.nvim_get_autocmds({ group = "OilGitDeferredInit" })
+				assert.is_true(
+					#autocmds > 0,
+					"Deferred init autocmds should exist"
+				)
+
+				local has_filetype = false
+				local has_oil_enter = false
+				local has_lazy_load = false
+				for _, ac in ipairs(autocmds) do
+					if ac.event == "FileType" and ac.pattern == "oil" then
+						has_filetype = true
+					end
+					if ac.event == "User" and ac.pattern == "OilEnter" then
+						has_oil_enter = true
+					end
+					if ac.event == "User" and ac.pattern == "LazyLoad" then
+						has_lazy_load = true
+					end
+				end
+
+				assert.is_true(
+					has_filetype,
+					"FileType oil autocmd should exist"
+				)
+				assert.is_true(
+					has_oil_enter,
+					"User OilEnter autocmd should exist"
+				)
+				assert.is_true(
+					has_lazy_load,
+					"User LazyLoad autocmd should exist"
+				)
+
+				util.is_oil_available = original
+				pcall(vim.api.nvim_del_augroup_by_name, "OilGitDeferredInit")
+			end
+		)
+
+		it("should not create duplicate deferred autocmds", function()
+			helpers.reset_oil_git_modules()
+
+			local util = require("oil-git.util")
+			local original = util.is_oil_available
+			util.is_oil_available = function()
+				return false
+			end
+
+			oil_git = require("oil-git")
+
+			oil_git.init()
+			oil_git.init()
+			oil_git.init()
+
+			local autocmds =
+				vim.api.nvim_get_autocmds({ group = "OilGitDeferredInit" })
+			assert.equals(3, #autocmds)
+
+			util.is_oil_available = original
+			pcall(vim.api.nvim_del_augroup_by_name, "OilGitDeferredInit")
+		end)
+
+		it("should clear deferred autocmds when init succeeds", function()
+			helpers.reset_oil_git_modules()
+
+			local util = require("oil-git.util")
+			local original = util.is_oil_available
+			local call_count = 0
+
+			util.is_oil_available = function()
+				call_count = call_count + 1
+				return call_count > 1
+			end
+
+			oil_git = require("oil-git")
+
+			local result1 = oil_git.init()
+			assert.is_false(result1)
+
+			local autocmds_before =
+				vim.api.nvim_get_autocmds({ group = "OilGitDeferredInit" })
+			assert.is_true(#autocmds_before > 0)
+
+			local result2 = oil_git.init()
+			assert.is_true(result2)
+
+			local ok, autocmds_after = pcall(
+				vim.api.nvim_get_autocmds,
+				{ group = "OilGitDeferredInit" }
+			)
+			if ok then
+				assert.equals(0, #autocmds_after)
+			end
+
+			util.is_oil_available = original
 		end)
 	end)
 

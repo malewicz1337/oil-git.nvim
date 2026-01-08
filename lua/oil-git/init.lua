@@ -7,6 +7,55 @@ local util = require("oil-git.util")
 
 local initialized = false
 local user_configured = false
+local pending_init = false
+local deferred_init_group = nil
+
+local function schedule_deferred_init()
+	if pending_init then
+		return
+	end
+	pending_init = true
+
+	deferred_init_group =
+		vim.api.nvim_create_augroup("OilGitDeferredInit", { clear = true })
+
+	vim.api.nvim_create_autocmd("FileType", {
+		group = deferred_init_group,
+		pattern = "oil",
+		callback = function()
+			pending_init = false
+			vim.schedule(function()
+				require("oil-git").init()
+			end)
+		end,
+		once = true,
+	})
+
+	vim.api.nvim_create_autocmd("User", {
+		group = deferred_init_group,
+		pattern = "OilEnter",
+		callback = function()
+			pending_init = false
+			vim.schedule(function()
+				require("oil-git").init()
+			end)
+		end,
+		once = true,
+	})
+
+	vim.api.nvim_create_autocmd("User", {
+		group = deferred_init_group,
+		pattern = "LazyLoad",
+		callback = function(args)
+			if args.data == "oil.nvim" then
+				pending_init = false
+				vim.schedule(function()
+					require("oil-git").init()
+				end)
+			end
+		end,
+	})
+end
 
 local function setup_autocmds()
 	local group = vim.api.nvim_create_augroup("OilGitStatus", { clear = true })
@@ -101,15 +150,22 @@ end
 
 function M.init()
 	if initialized then
-		return
+		return true
 	end
+
+	if deferred_init_group then
+		pcall(vim.api.nvim_del_augroup_by_id, deferred_init_group)
+		deferred_init_group = nil
+	end
+	pending_init = false
 
 	if not util.is_oil_available() then
 		util.debug_log(
 			"minimal",
-			"oil.nvim not available, deferring initialization"
+			"oil.nvim not available, scheduling deferred initialization"
 		)
-		return
+		schedule_deferred_init()
+		return false
 	end
 
 	config.ensure()
@@ -117,6 +173,7 @@ function M.init()
 	setup_autocmds()
 	initialized = true
 	util.debug_log("minimal", "Initialized successfully")
+	return true
 end
 
 function M.setup(opts)
@@ -127,6 +184,10 @@ end
 
 function M._is_configured()
 	return user_configured
+end
+
+function M._is_initialized()
+	return initialized
 end
 
 function M.refresh()
