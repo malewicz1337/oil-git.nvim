@@ -61,7 +61,7 @@ local function can_use_signcolumn()
 end
 
 function M.setup()
-	signcolumn_cache = nil -- Reset cache on setup
+	signcolumn_cache = nil
 	local cfg = config.get_raw()
 	for name, opts in pairs(cfg.highlights) do
 		if vim.fn.hlexists(name) == 0 then
@@ -139,15 +139,12 @@ local function apply_to_buffer(
 	local file_symbols = cfg.symbols.file
 	local dir_symbols = cfg.symbols.directory
 
-	-- Phase 1: Single loop to collect highlights and build hash
 	local highlights = {}
 	local highlights_idx = 0
-	-- Include changedtick to detect buffer redraws (e.g., oil refresh)
 	local changedtick = vim.api.nvim_buf_get_changedtick(bufnr)
 	local hash_parts = { current_dir, tostring(changedtick) }
 	local hash_idx = 2
 
-	-- Pre-allocate highlights table
 	for i = 1, line_count do
 		highlights[i] = nil
 	end
@@ -201,12 +198,10 @@ local function apply_to_buffer(
 			end
 		end
 
-		-- Build hash part (no line index - reordering won't trigger rehighlight)
 		hash_idx = hash_idx + 1
 		hash_parts[hash_idx] =
 			string.format("%s:%s", entry_name, status_code or "")
 
-		-- Collect highlight data if applicable
 		if status_code and symbols then
 			local hl_group, symbol = status_mapper.map(status_code, symbols)
 
@@ -239,7 +234,6 @@ local function apply_to_buffer(
 		::continue::
 	end
 
-	-- Phase 2: Compute hash and check if highlights need updating
 	local new_hash = vim.fn.sha256(table.concat(hash_parts, "|"))
 	if buffer_highlight_hashes[bufnr] == new_hash then
 		util.debug_log("verbose", "Highlight hash unchanged, skipping reapply")
@@ -247,7 +241,6 @@ local function apply_to_buffer(
 	end
 	buffer_highlight_hashes[bufnr] = new_hash
 
-	-- Phase 3: Apply highlights from collected data
 	local ns_id = get_namespace(bufnr)
 	pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
 
@@ -338,10 +331,6 @@ function M.apply(bufnr, captured_dir)
 		current_dir,
 		function(git_status, status_trie, git_root)
 			if not vim.api.nvim_buf_is_valid(bufnr) then
-				return
-			end
-			local ok, new_dir = pcall(oil.get_current_dir, bufnr)
-			if not ok or new_dir ~= current_dir then
 				return
 			end
 

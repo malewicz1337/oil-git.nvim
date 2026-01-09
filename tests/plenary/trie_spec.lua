@@ -96,7 +96,7 @@ describe("trie", function()
 		it("should ignore zero priority status codes", function()
 			local root = trie.create_node()
 			local git_root = "/repo"
-			trie.insert(root, "/repo/file.lua", "XX", git_root) -- unknown, priority 0
+			trie.insert(root, "/repo/file.lua", "XX", git_root)
 
 			assert.same({}, root.children)
 		end)

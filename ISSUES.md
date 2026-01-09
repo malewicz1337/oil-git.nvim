@@ -20,6 +20,15 @@ Cache TTL is hardcoded - it's set to 500ms which works for most cases, but some 
 
 Signcolumn detection is fragile - only checks for specific patterns like `:2`, `:3`, `:4`. Could be smarter about this
 
+Removed dir check in `highlights.lua:336`:
+```lua
+local ok, new_dir = pcall(oil.get_current_dir, bufnr)
+if not ok or new_dir ~= current_dir then return end
+```
+Path format diffs (trailing slashes) caused false mismatches. Git status is repo-wide anyway.
+- WITH check: highlights sometimes never applied
+- WITHOUT: maybe brief wrong highlights, then auto-fixed
+
 ---
 
 ## Ideas for Later
