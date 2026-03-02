@@ -97,6 +97,7 @@ require("oil-git").setup({
   show_ignored_files = false,       -- Show ignored file status
   show_ignored_directories = false, -- Show ignored directory status
   symbol_position = "eol",  -- "eol", "signcolumn", or "none"
+  can_use_signcolumn = nil,  -- Optional callback(bufnr): nil|bool|string
   ignore_gitsigns_update = false,   -- Ignore GitSignsUpdate events (fallback for flickering)
   debug = false,            -- false, "minimal", or "verbose"
 
@@ -120,6 +121,17 @@ require("oil-git").setup({
   },
 })
 ```
+
+### Signcolumn callback
+
+When `symbol_position = "signcolumn"`, you can optionally provide
+`can_use_signcolumn = function(bufnr) ... end` to control behavior per buffer.
+
+- Return `nil` to use the default oil.nvim compatibility check.
+- Return `true` to force signcolumn symbols on.
+- Return `false` to force signcolumn symbols off.
+- Return a string (for example `"yes:2"`) to force signcolumn symbols on and
+  set the window `signcolumn` value when symbols are present.
 
 ## Git Status Reference
 

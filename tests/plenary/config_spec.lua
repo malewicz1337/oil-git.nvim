@@ -133,6 +133,7 @@ describe("config", function()
 			assert.is_false(cfg.show_ignored_files)
 			assert.is_false(cfg.show_ignored_directories)
 			assert.equals("eol", cfg.symbol_position)
+			assert.is_nil(cfg.can_use_signcolumn)
 			assert.is_false(cfg.ignore_gitsigns_update)
 			assert.is_false(cfg.debug)
 

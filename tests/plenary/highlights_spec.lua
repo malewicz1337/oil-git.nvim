@@ -10,6 +10,22 @@ describe("highlights", function()
 		highlights = require("oil-git.highlights")
 	end)
 
+	local function get_status_extmarks(bufnr)
+		local ns_id = vim.api.nvim_create_namespace("oil_git_status_" .. bufnr)
+		local ok, extmarks = pcall(
+			vim.api.nvim_buf_get_extmarks,
+			bufnr,
+			ns_id,
+			0,
+			-1,
+			{ details = true }
+		)
+		if not ok then
+			return {}
+		end
+		return extmarks
+	end
+
 	after_each(function()
 		helpers.close_oil_buffers()
 	end)
@@ -164,6 +180,106 @@ describe("highlights", function()
 					helpers.cleanup(repo_dir)
 				end
 			)
+
+			describe("signcolumn callback", function()
+				local repo_dir
+
+				before_each(function()
+					repo_dir = helpers.create_temp_git_repo()
+					helpers.create_and_commit_file(
+						repo_dir,
+						"file.lua",
+						"-- committed"
+					)
+					helpers.create_file(repo_dir, "file.lua", "-- modified")
+					helpers.wait_for(function()
+						return helpers.get_git_status(repo_dir) ~= ""
+					end, 1000)
+				end)
+
+				after_each(function()
+					helpers.close_oil_buffers()
+					helpers.cleanup(repo_dir)
+				end)
+
+				it(
+					"should respect false callback and avoid sign_text",
+					function()
+						config.setup({
+							symbol_position = "signcolumn",
+							can_use_signcolumn = function()
+								return false
+							end,
+						})
+						highlights.setup()
+
+						local oil = require("oil")
+						oil.open(repo_dir)
+
+						local ready = helpers.wait_for(function()
+							return vim.bo.filetype == "oil"
+						end, 2000)
+
+						if not ready then
+							return
+						end
+
+						local bufnr = vim.api.nvim_get_current_buf()
+						helpers.wait_for_oil_entries(bufnr, 2000)
+						highlights.apply(bufnr, repo_dir .. "/")
+
+						local has_marks = helpers.wait_for(function()
+							return #get_status_extmarks(bufnr) > 0
+						end, 2000)
+						assert.is_true(has_marks)
+
+						local marks = get_status_extmarks(bufnr)
+						local has_sign = false
+						local has_virt = false
+
+						for _, mark in ipairs(marks) do
+							local details = mark[4] or {}
+							if details.sign_text then
+								has_sign = true
+							end
+							if details.virt_text then
+								has_virt = true
+							end
+						end
+
+						assert.is_false(has_sign)
+						assert.is_true(has_virt)
+					end
+				)
+
+				it("should not crash when callback throws", function()
+					config.setup({
+						symbol_position = "signcolumn",
+						can_use_signcolumn = function()
+							error("callback failure")
+						end,
+					})
+					highlights.setup()
+
+					local oil = require("oil")
+					oil.open(repo_dir)
+
+					local ready = helpers.wait_for(function()
+						return vim.bo.filetype == "oil"
+					end, 2000)
+
+					if not ready then
+						return
+					end
+
+					local bufnr = vim.api.nvim_get_current_buf()
+					helpers.wait_for_oil_entries(bufnr, 2000)
+
+					assert.has_no.errors(function()
+						highlights.apply(bufnr, repo_dir .. "/")
+					end)
+				end)
+			end)
 
 			describe("untracked and ignored inheritance", function()
 				local repo_dir

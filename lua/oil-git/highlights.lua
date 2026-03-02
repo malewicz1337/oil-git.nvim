@@ -60,6 +60,13 @@ local function can_use_signcolumn()
 	return true
 end
 
+local function set_signcolumn(bufnr, value)
+	local winid = vim.fn.bufwinid(bufnr)
+	if winid ~= -1 then
+		vim.wo[winid].signcolumn = value
+	end
+end
+
 function M.setup()
 	signcolumn_cache = nil
 	local cfg = config.get_raw()
@@ -86,6 +93,17 @@ function M.clear(bufnr)
 		buffer_ns_ids[bufnr] = nil
 	end
 	buffer_highlight_hashes[bufnr] = nil
+
+	local cfg = config.get()
+	if
+		cfg.symbol_position == constants.SYMBOL_POSITIONS.SIGNCOLUMN
+		and cfg.can_use_signcolumn
+	then
+		local ok, sc_value = pcall(cfg.can_use_signcolumn, bufnr)
+		if ok and type(sc_value) == "string" then
+			set_signcolumn(bufnr, "no")
+		end
+	end
 end
 
 function M.on_buf_delete(bufnr)
@@ -131,9 +149,41 @@ local function apply_to_buffer(
 	local show_ignored_files = cfg.show_ignored_files
 	local show_ignored_directories = cfg.show_ignored_directories
 	local symbol_position = cfg.symbol_position
-	local use_signcolumn = symbol_position
-			== constants.SYMBOL_POSITIONS.SIGNCOLUMN
-		and can_use_signcolumn()
+	local can_use_signcolumn_fn = cfg.can_use_signcolumn
+	local can_use_signcolumn_override = nil
+	local manage_signcolumn = false
+	local scl_value = nil
+
+	if
+		can_use_signcolumn_fn
+		and symbol_position == constants.SYMBOL_POSITIONS.SIGNCOLUMN
+	then
+		local ok, callback_value = pcall(can_use_signcolumn_fn, bufnr)
+		if ok then
+			if type(callback_value) == "string" then
+				scl_value = callback_value
+				manage_signcolumn = true
+				can_use_signcolumn_override = true
+			elseif type(callback_value) == "boolean" then
+				can_use_signcolumn_override = callback_value
+			end
+		else
+			util.debug_log(
+				"minimal",
+				"can_use_signcolumn callback failed: %s",
+				callback_value
+			)
+		end
+	end
+
+	local use_signcolumn = false
+	if symbol_position == constants.SYMBOL_POSITIONS.SIGNCOLUMN then
+		if can_use_signcolumn_override ~= nil then
+			use_signcolumn = can_use_signcolumn_override
+		else
+			use_signcolumn = can_use_signcolumn()
+		end
+	end
 	local symbols_not_disabled = symbol_position
 		~= constants.SYMBOL_POSITIONS.NONE
 	local file_symbols = cfg.symbols.file
@@ -276,7 +326,7 @@ local function apply_to_buffer(
 					hl.line_idx,
 					0,
 					{
-						sign_text = hl.symbol:sub(1, 2),
+						sign_text = vim.fn.strcharpart(hl.symbol, 0, 2),
 						sign_hl_group = hl.hl_group,
 					}
 				)
@@ -298,6 +348,10 @@ local function apply_to_buffer(
 			end
 			symbol_count = symbol_count + 1
 		end
+	end
+
+	if manage_signcolumn then
+		set_signcolumn(bufnr, symbol_count > 0 and scl_value or "no")
 	end
 
 	buffer_ns_ids[bufnr] = ns_id
