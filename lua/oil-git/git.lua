@@ -4,6 +4,7 @@ local uv = vim.uv or vim.loop
 local path = require("oil-git.path")
 local trie = require("oil-git.trie")
 local util = require("oil-git.util")
+local config = require("oil-git.config")
 
 local CACHE_TTL_MS = 500
 
@@ -210,9 +211,15 @@ function M.get_status_async(dir, callback)
 		local stdout = uv.new_pipe(false)
 		local output_parts = {}
 
+		local cfg = config.get()
+		local args = { "status", "--porcelain" }
+		if cfg.show_ignored_files or cfg.show_ignored_directories then
+			table.insert(args, "--ignored")
+		end
+
 		local handle
 		handle = uv.spawn("git", {
-			args = { "status", "--porcelain", "--ignored" },
+			args = args,
 			cwd = git_root,
 			stdio = { nil, stdout, nil },
 		}, function(code)
