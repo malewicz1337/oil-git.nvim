@@ -13,6 +13,7 @@ M.HIGHLIGHT_GROUPS = {
 	MODIFIED = "OilGitModified",
 	MODIFIED_STAGED = "OilGitModifiedStaged",
 	MODIFIED_UNSTAGED = "OilGitModifiedUnstaged",
+	BRANCH = "OilGitBranch",
 	RENAMED = "OilGitRenamed",
 	DELETED = "OilGitDeleted",
 	COPIED = "OilGitCopied",

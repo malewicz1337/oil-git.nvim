@@ -33,6 +33,8 @@ describe("config", function()
 				show_directory_symbols = false,
 				show_ignored_files = true,
 				show_ignored_directories = true,
+				show_branch = true,
+				branch_format = "branch:%s",
 				symbol_position = "signcolumn",
 			})
 			local cfg = config.get()
@@ -42,6 +44,8 @@ describe("config", function()
 			assert.is_false(cfg.show_directory_symbols)
 			assert.is_true(cfg.show_ignored_files)
 			assert.is_true(cfg.show_ignored_directories)
+			assert.is_true(cfg.show_branch)
+			assert.equals("branch:%s", cfg.branch_format)
 			assert.equals("signcolumn", cfg.symbol_position)
 		end)
 
@@ -153,6 +157,8 @@ describe("config", function()
 			assert.is_true(cfg.show_directory_symbols)
 			assert.is_false(cfg.show_ignored_files)
 			assert.is_false(cfg.show_ignored_directories)
+			assert.is_false(cfg.show_branch)
+			assert.equals(" %s", cfg.branch_format)
 			assert.equals("eol", cfg.symbol_position)
 			assert.is_nil(cfg.can_use_signcolumn)
 			assert.is_false(cfg.ignore_gitsigns_update)
@@ -195,6 +201,7 @@ describe("config", function()
 				"OilGitModified",
 				"OilGitModifiedStaged",
 				"OilGitModifiedUnstaged",
+				"OilGitBranch",
 				"OilGitRenamed",
 				"OilGitDeleted",
 				"OilGitCopied",

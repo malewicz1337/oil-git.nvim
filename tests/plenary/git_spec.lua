@@ -170,6 +170,136 @@ describe("git", function()
 		end)
 	end)
 
+	describe("get_branch_async", function()
+		it("should return current branch name", function()
+			local repo_dir = helpers.create_temp_git_repo()
+			helpers.create_and_commit_file(repo_dir, "file.lua", "content")
+
+			local expected = vim.fn
+				.system({
+					"git",
+					"-C",
+					repo_dir,
+					"branch",
+					"--show-current",
+				})
+				:gsub("[\r\n]+$", "")
+
+			local done = false
+			local result_branch, result_root
+
+			git.get_branch_async(repo_dir, function(branch, root)
+				result_branch = branch
+				result_root = root
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			assert.equals(expected, result_branch)
+			assert.equals(repo_dir, result_root)
+
+			helpers.cleanup(repo_dir)
+		end)
+
+		it("should return nil for non-git directory", function()
+			local tmp_dir = vim.fn.tempname()
+			vim.fn.mkdir(tmp_dir, "p")
+
+			local done = false
+			local result_branch, result_root
+
+			git.get_branch_async(tmp_dir, function(branch, root)
+				result_branch = branch
+				result_root = root
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			assert.is_nil(result_branch)
+			assert.is_nil(result_root)
+
+			helpers.cleanup(tmp_dir)
+		end)
+
+		it("should return short hash for detached HEAD", function()
+			local repo_dir = helpers.create_temp_git_repo()
+			helpers.create_and_commit_file(repo_dir, "file.lua", "content")
+
+			local expected = vim.fn
+				.system({
+					"git",
+					"-C",
+					repo_dir,
+					"rev-parse",
+					"--short",
+					"HEAD",
+				})
+				:gsub("[\r\n]+$", "")
+			vim.fn.system({
+				"git",
+				"-C",
+				repo_dir,
+				"checkout",
+				"--detach",
+				"HEAD",
+			})
+
+			local done = false
+			local result_branch
+
+			git.get_branch_async(repo_dir, function(branch)
+				result_branch = branch
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			assert.equals(expected, result_branch)
+
+			helpers.cleanup(repo_dir)
+		end)
+
+		it("should refresh branch after cache invalidation", function()
+			local repo_dir = helpers.create_temp_git_repo()
+			helpers.create_and_commit_file(repo_dir, "file.lua", "content")
+
+			local done = false
+			git.get_branch_async(repo_dir, function()
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			vim.fn.system({ "git", "-C", repo_dir, "checkout", "-b", "feature" })
+			git.invalidate_cache()
+			done = false
+
+			local result_branch
+			git.get_branch_async(repo_dir, function(branch)
+				result_branch = branch
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			assert.equals("feature", result_branch)
+
+			helpers.cleanup(repo_dir)
+		end)
+	end)
+
 	describe("get_status_async", function()
 		it("should only request ignored entries when configured", function()
 			local repo_dir = helpers.create_temp_git_repo()

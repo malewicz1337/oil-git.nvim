@@ -157,6 +157,7 @@ describe("init", function()
 				"OilGitModified",
 				"OilGitModifiedStaged",
 				"OilGitModifiedUnstaged",
+				"OilGitBranch",
 				"OilGitDeleted",
 				"OilGitRenamed",
 				"OilGitUntracked",

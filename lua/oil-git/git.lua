@@ -14,6 +14,9 @@ local cache = {
 	status = {},
 	status_trie = nil,
 	include_ignored = nil,
+	branch = nil,
+	branch_root = nil,
+	branch_timestamp = 0,
 }
 
 function M.invalidate_cache()
@@ -22,6 +25,9 @@ function M.invalidate_cache()
 	cache.status = {}
 	cache.status_trie = nil
 	cache.include_ignored = nil
+	cache.branch = nil
+	cache.branch_root = nil
+	cache.branch_timestamp = 0
 	util.debug_log("verbose", "Git status cache invalidated")
 end
 
@@ -126,6 +132,102 @@ function M.get_root_async(dir, callback)
 		if data then
 			table.insert(output_parts, data)
 		end
+	end)
+end
+
+local function run_git_stdout(args, cwd, callback)
+	local stdout = uv.new_pipe(false)
+	local output_parts = {}
+
+	local handle
+	handle = uv.spawn("git", {
+		args = args,
+		cwd = cwd,
+		stdio = { nil, stdout, nil },
+	}, function(code)
+		stdout:read_stop()
+		stdout:close()
+		if handle then
+			handle:close()
+		end
+
+		local output = table.concat(output_parts):gsub("[\r\n]+$", "")
+		callback(code, output)
+	end)
+
+	if not handle then
+		stdout:close()
+		callback(-1, nil)
+		return
+	end
+
+	stdout:read_start(function(_, data)
+		if data then
+			table.insert(output_parts, data)
+		end
+	end)
+end
+
+function M.get_branch_async(dir, callback)
+	M.get_root_async(dir, function(git_root)
+		if not git_root then
+			util.debug_log("verbose", "No git root found for branch: %s", dir)
+			callback(nil, nil)
+			return
+		end
+
+		local now = uv.now()
+		if
+			cache.branch_root == git_root
+			and (now - cache.branch_timestamp) < CACHE_TTL_MS
+		then
+			util.debug_log(
+				"verbose",
+				"Branch cache hit for: %s (age: %dms)",
+				git_root,
+				now - cache.branch_timestamp
+			)
+			callback(cache.branch, cache.branch_root)
+			return
+		end
+
+		local function finish(branch)
+			cache.branch = branch
+			cache.branch_root = git_root
+			cache.branch_timestamp = uv.now()
+
+			vim.schedule(function()
+				callback(branch, git_root)
+			end)
+		end
+
+		run_git_stdout(
+			{ "symbolic-ref", "--quiet", "--short", "HEAD" },
+			git_root,
+			function(code, output)
+				if code == 0 and output and output ~= "" then
+					finish(output)
+					return
+				end
+
+				run_git_stdout(
+					{ "rev-parse", "--short", "HEAD" },
+					git_root,
+					function(fallback_code, fallback_output)
+						if
+							fallback_code == 0
+							and fallback_output
+							and fallback_output ~= ""
+						then
+							finish(fallback_output)
+							return
+						end
+
+						finish(nil)
+					end
+				)
+			end
+		)
 	end)
 end
 

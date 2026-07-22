@@ -26,6 +26,22 @@ describe("highlights", function()
 		return extmarks
 	end
 
+	local function get_branch_extmarks(bufnr)
+		local ns_id = vim.api.nvim_create_namespace("oil_git_branch_" .. bufnr)
+		local ok, extmarks = pcall(
+			vim.api.nvim_buf_get_extmarks,
+			bufnr,
+			ns_id,
+			0,
+			-1,
+			{ details = true }
+		)
+		if not ok then
+			return {}
+		end
+		return extmarks
+	end
+
 	after_each(function()
 		helpers.close_oil_buffers()
 	end)
@@ -36,6 +52,7 @@ describe("highlights", function()
 			vim.cmd("highlight clear OilGitModified")
 			vim.cmd("highlight clear OilGitModifiedStaged")
 			vim.cmd("highlight clear OilGitModifiedUnstaged")
+			vim.cmd("highlight clear OilGitBranch")
 			vim.cmd("highlight clear OilGitDeleted")
 
 			highlights.setup()
@@ -45,6 +62,7 @@ describe("highlights", function()
 				"OilGitModified",
 				"OilGitModifiedStaged",
 				"OilGitModifiedUnstaged",
+				"OilGitBranch",
 				"OilGitDeleted",
 				"OilGitRenamed",
 				"OilGitUntracked",
@@ -503,7 +521,47 @@ describe("highlights", function()
 	end)
 
 	describe("empty git status handling", function()
-		it("should handle clean repository", function()
+		it("should show branch when enabled", function()
+			local repo_dir = helpers.create_temp_git_repo()
+			helpers.create_and_commit_file(repo_dir, "file.lua", "content")
+			require("oil-git").setup({ show_branch = true })
+
+			if pcall(require, "oil") then
+				local oil = require("oil")
+				oil.open(repo_dir)
+
+				local ready = helpers.wait_for(function()
+					return vim.bo.filetype == "oil"
+				end, 2000)
+
+				if ready then
+					local bufnr = vim.api.nvim_get_current_buf()
+					highlights.apply(bufnr, repo_dir .. "/")
+
+					local has_branch = helpers.wait_for(function()
+						return #get_branch_extmarks(bufnr) > 0
+					end, 2000)
+					assert.is_true(has_branch)
+
+					local branch_marks = get_branch_extmarks(bufnr)
+					local branch_details = branch_marks[1][4] or {}
+					assert.is_table(branch_details.virt_text)
+					assert.equals(
+						"OilGitBranch",
+						branch_details.virt_text[1][2]
+					)
+
+					local count = helpers.count_extmarks(bufnr)
+					assert.equals(0, count)
+				end
+
+				helpers.close_oil_buffers()
+			end
+
+			helpers.cleanup(repo_dir)
+		end)
+
+		it("should not show branch by default", function()
 			local repo_dir = helpers.create_temp_git_repo()
 			helpers.create_and_commit_file(repo_dir, "file.lua", "content")
 
@@ -523,8 +581,7 @@ describe("highlights", function()
 						return false
 					end, 50)
 
-					local count = helpers.count_extmarks(bufnr)
-					assert.equals(0, count)
+					assert.equals(0, #get_branch_extmarks(bufnr))
 				end
 
 				helpers.close_oil_buffers()

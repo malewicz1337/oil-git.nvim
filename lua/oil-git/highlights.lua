@@ -11,11 +11,16 @@ local git = require("oil-git.git")
 local pending_timers = {} -- { [bufnr] = timer_id }
 local MAX_PENDING_TIMERS = 10
 local buffer_ns_ids = {}
+local branch_ns_ids = {}
 local buffer_highlight_hashes = {} -- { [bufnr] = sha256_hash }
 local signcolumn_cache = nil
 
 local function get_namespace(suffix)
 	return vim.api.nvim_create_namespace(constants.NAMESPACES.PREFIX .. suffix)
+end
+
+local function get_branch_namespace(bufnr)
+	return vim.api.nvim_create_namespace("oil_git_branch_" .. bufnr)
 end
 
 local function can_use_signcolumn()
@@ -67,6 +72,63 @@ local function set_signcolumn(bufnr, value)
 	end
 end
 
+local function clear_status(bufnr, reset_signcolumn)
+	local ns_id = buffer_ns_ids[bufnr]
+	if ns_id then
+		pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
+		buffer_ns_ids[bufnr] = nil
+	end
+	buffer_highlight_hashes[bufnr] = nil
+
+	if not reset_signcolumn then
+		return
+	end
+
+	local cfg = config.get()
+	if
+		cfg.symbol_position == constants.SYMBOL_POSITIONS.SIGNCOLUMN
+		and cfg.can_use_signcolumn
+	then
+		local ok, sc_value = pcall(cfg.can_use_signcolumn, bufnr)
+		if ok and type(sc_value) == "string" then
+			set_signcolumn(bufnr, "no")
+		end
+	end
+end
+
+local function clear_branch(bufnr)
+	local ns_id = branch_ns_ids[bufnr] or get_branch_namespace(bufnr)
+	pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
+	branch_ns_ids[bufnr] = nil
+end
+
+local function render_branch(bufnr, branch)
+	local cfg = config.get()
+	if not cfg.show_branch or not branch or branch == "" then
+		clear_branch(bufnr)
+		return
+	end
+
+	local text = branch
+	if type(cfg.branch_format) == "string" then
+		local ok, formatted = pcall(string.format, cfg.branch_format, branch)
+		if ok then
+			text = formatted
+		end
+	end
+
+	local ns_id = get_branch_namespace(bufnr)
+	pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
+	pcall(vim.api.nvim_buf_set_extmark, bufnr, ns_id, 0, 0, {
+		virt_text = {
+			{ " " .. text, constants.HIGHLIGHT_GROUPS.BRANCH },
+		},
+		virt_text_pos = "right_align",
+		hl_mode = "combine",
+	})
+	branch_ns_ids[bufnr] = ns_id
+end
+
 function M.setup()
 	signcolumn_cache = nil
 	local cfg = config.get_raw()
@@ -87,23 +149,8 @@ function M.clear(bufnr)
 	end
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 
-	local ns_id = buffer_ns_ids[bufnr]
-	if ns_id then
-		pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
-		buffer_ns_ids[bufnr] = nil
-	end
-	buffer_highlight_hashes[bufnr] = nil
-
-	local cfg = config.get()
-	if
-		cfg.symbol_position == constants.SYMBOL_POSITIONS.SIGNCOLUMN
-		and cfg.can_use_signcolumn
-	then
-		local ok, sc_value = pcall(cfg.can_use_signcolumn, bufnr)
-		if ok and type(sc_value) == "string" then
-			set_signcolumn(bufnr, "no")
-		end
-	end
+	clear_status(bufnr, true)
+	clear_branch(bufnr)
 end
 
 function M.on_buf_delete(bufnr)
@@ -117,6 +164,7 @@ function M.on_buf_delete(bufnr)
 	end
 
 	buffer_ns_ids[bufnr] = nil
+	branch_ns_ids[bufnr] = nil
 	buffer_highlight_hashes[bufnr] = nil
 end
 
@@ -135,7 +183,7 @@ local function apply_to_buffer(
 	local cfg = config.get()
 
 	if vim.tbl_isempty(git_status) then
-		M.clear(bufnr)
+		clear_status(bufnr, true)
 		util.debug_log("verbose", "No git status found, cleared highlights")
 		return
 	end
@@ -381,10 +429,31 @@ function M.apply(bufnr, captured_dir)
 		return
 	end
 
+	local function buffer_still_matches_dir()
+		if not vim.api.nvim_buf_is_valid(bufnr) then
+			return false
+		end
+
+		local ok, dir = pcall(oil.get_current_dir, bufnr)
+		return ok and dir == current_dir
+	end
+
+	if config.get().show_branch then
+		git.get_branch_async(current_dir, function(branch)
+			if not buffer_still_matches_dir() then
+				return
+			end
+
+			render_branch(bufnr, branch)
+		end)
+	else
+		clear_branch(bufnr)
+	end
+
 	git.get_status_async(
 		current_dir,
 		function(git_status, status_trie, git_root)
-			if not vim.api.nvim_buf_is_valid(bufnr) then
+			if not buffer_still_matches_dir() then
 				return
 			end
 
