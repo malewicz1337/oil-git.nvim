@@ -1,10 +1,12 @@
 describe("git", function()
 	local git
+	local config
 	local helpers = require("tests.helpers")
 
 	before_each(function()
 		helpers.reset_oil_git_modules()
-		require("oil-git.config").setup({ debug = false })
+		config = require("oil-git.config")
+		config.setup({ debug = false })
 		git = require("oil-git.git")
 		git.invalidate_cache()
 	end)
@@ -169,6 +171,54 @@ describe("git", function()
 	end)
 
 	describe("get_status_async", function()
+		it("should only request ignored entries when configured", function()
+			local repo_dir = helpers.create_temp_git_repo()
+			local uv = vim.uv or vim.loop
+
+			local function capture_args(opts)
+				config.setup(opts)
+				git.invalidate_cache()
+
+				local original_spawn = uv.spawn
+				local args
+				local done = false
+				uv.spawn = function(command, spawn_opts, callback)
+					if command == "git" and spawn_opts.args[1] == "status" then
+						args = vim.deepcopy(spawn_opts.args)
+					end
+					return original_spawn(command, spawn_opts, callback)
+				end
+
+				local ok, err = pcall(function()
+					git.get_status_async(repo_dir, function()
+						done = true
+					end)
+				end)
+				uv.spawn = original_spawn
+
+				assert.is_true(ok, err)
+				assert.is_true(helpers.wait_for(function()
+					return done
+				end))
+				return args
+			end
+
+			assert.same(
+				{ "status", "--porcelain" },
+				capture_args({ debug = false })
+			)
+			assert.same(
+				{ "status", "--porcelain", "--ignored" },
+				capture_args({ debug = false, show_ignored_files = true })
+			)
+			assert.same(
+				{ "status", "--porcelain", "--ignored" },
+				capture_args({ debug = false, show_ignored_directories = true })
+			)
+
+			helpers.cleanup(repo_dir)
+		end)
+
 		it(
 			"should call callback with empty result for non-git directory",
 			function()
@@ -507,6 +557,50 @@ describe("git", function()
 
 				helpers.cleanup(repo_dir)
 			end)
+
+			it("should not reuse cache when ignored display changes", function()
+				local repo_dir = helpers.create_temp_git_repo()
+				helpers.create_gitignore(repo_dir, { "ignored.log" })
+				helpers.stage_file(repo_dir, ".gitignore")
+				helpers.commit(repo_dir, "add gitignore")
+				helpers.create_file(repo_dir, "ignored.log", "ignored")
+
+				local uv = vim.uv or vim.loop
+				local original_now = uv.now
+				uv.now = function()
+					return 1000
+				end
+
+				local first_done = false
+				local first_status
+				git.get_status_async(repo_dir, function(status)
+					first_status = status
+					first_done = true
+				end)
+				local first_completed = helpers.wait_for(function()
+					return first_done
+				end)
+
+				config.setup({ debug = false, show_ignored_files = true })
+				local second_done = false
+				local second_status
+				git.get_status_async(repo_dir, function(status)
+					second_status = status
+					second_done = true
+				end)
+				local second_completed = helpers.wait_for(function()
+					return second_done
+				end)
+
+				uv.now = original_now
+
+				assert.is_true(first_completed)
+				assert.is_true(second_completed)
+				assert.is_nil(first_status[repo_dir .. "/ignored.log"])
+				assert.equals("!!", second_status[repo_dir .. "/ignored.log"])
+
+				helpers.cleanup(repo_dir)
+			end)
 		end)
 
 		describe("multiple files", function()
@@ -722,6 +816,7 @@ describe("git", function()
 		local trie
 
 		before_each(function()
+			config.setup({ debug = false, show_ignored_directories = true })
 			trie = require("oil-git.trie")
 			repo_dir = helpers.create_temp_git_repo()
 			helpers.create_gitignore(repo_dir, { "ignored_dir/" })
@@ -1079,6 +1174,10 @@ describe("git", function()
 	end)
 
 	describe("gitignore patterns", function()
+		before_each(function()
+			config.setup({ debug = false, show_ignored_files = true })
+		end)
+
 		it("should handle wildcard patterns", function()
 			local repo_dir = helpers.create_temp_git_repo()
 			helpers.create_gitignore(repo_dir, { "*.log", "*.tmp" })

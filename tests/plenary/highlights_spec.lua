@@ -318,33 +318,65 @@ describe("highlights", function()
 					helpers.cleanup(repo_dir)
 				end)
 
+				it("should show status for files in untracked dirs", function()
+					local oil = require("oil")
+					oil.open(repo_dir .. "/untracked_dir")
+
+					local ready = helpers.wait_for(function()
+						return vim.bo.filetype == "oil"
+					end, 2000)
+
+					if ready then
+						local bufnr = vim.api.nvim_get_current_buf()
+						helpers.wait_for_oil_entries(bufnr, 2000)
+						highlights.apply(bufnr, repo_dir .. "/untracked_dir/")
+
+						local has_extmarks = helpers.wait_for(function()
+							return helpers.count_extmarks(bufnr) > 0
+						end, 2000)
+
+						assert.is_true(
+							has_extmarks,
+							"Expected extmarks for untracked files"
+						)
+					end
+				end)
+
 				it(
-					"should show status for files in untracked and ignored dirs",
+					"should inherit ignored status inside ignored dirs",
 					function()
+						require("oil-git").setup({ show_ignored_files = true })
 						local oil = require("oil")
-						oil.open(repo_dir .. "/untracked_dir")
+						oil.open(repo_dir .. "/ignored_dir")
 
 						local ready = helpers.wait_for(function()
 							return vim.bo.filetype == "oil"
 						end, 2000)
+						assert.is_true(ready)
 
-						if ready then
-							local bufnr = vim.api.nvim_get_current_buf()
-							helpers.wait_for_oil_entries(bufnr, 2000)
-							highlights.apply(
-								bufnr,
-								repo_dir .. "/untracked_dir/"
-							)
+						local bufnr = vim.api.nvim_get_current_buf()
+						helpers.wait_for_oil_entries(bufnr, 2000)
+						highlights.apply(bufnr, repo_dir .. "/ignored_dir/")
 
-							local has_extmarks = helpers.wait_for(function()
-								return helpers.count_extmarks(bufnr) > 0
-							end, 2000)
+						local has_ignored = helpers.wait_for(function()
+							for _, mark in ipairs(get_status_extmarks(bufnr)) do
+								local details = mark[4] or {}
+								if details.hl_group == "OilGitIgnored" then
+									return true
+								end
+								local virt_text = details.virt_text
+								if
+									virt_text
+									and virt_text[1]
+									and virt_text[1][2] == "OilGitIgnored"
+								then
+									return true
+								end
+							end
+							return false
+						end, 2000)
 
-							assert.is_true(
-								has_extmarks,
-								"Expected extmarks for untracked files"
-							)
-						end
+						assert.is_true(has_ignored)
 					end
 				)
 			end)

@@ -13,6 +13,7 @@ local cache = {
 	timestamp = 0,
 	status = {},
 	status_trie = nil,
+	include_ignored = nil,
 }
 
 function M.invalidate_cache()
@@ -20,6 +21,7 @@ function M.invalidate_cache()
 	cache.timestamp = 0
 	cache.status = {}
 	cache.status_trie = nil
+	cache.include_ignored = nil
 	util.debug_log("verbose", "Git status cache invalidated")
 end
 
@@ -187,9 +189,13 @@ function M.get_status_async(dir, callback)
 			return
 		end
 
+		local cfg = config.get()
+		local include_ignored = cfg.show_ignored_files
+			or cfg.show_ignored_directories
 		local now = uv.now()
 		if
 			cache.git_root == git_root
+			and cache.include_ignored == include_ignored
 			and (now - cache.timestamp) < CACHE_TTL_MS
 		then
 			util.debug_log(
@@ -211,9 +217,8 @@ function M.get_status_async(dir, callback)
 		local stdout = uv.new_pipe(false)
 		local output_parts = {}
 
-		local cfg = config.get()
 		local args = { "status", "--porcelain" }
-		if cfg.show_ignored_files or cfg.show_ignored_directories then
+		if include_ignored then
 			table.insert(args, "--ignored")
 		end
 
@@ -246,6 +251,7 @@ function M.get_status_async(dir, callback)
 			cache.timestamp = uv.now()
 			cache.status = status
 			cache.status_trie = status_trie
+			cache.include_ignored = include_ignored
 
 			util.debug_log(
 				"verbose",
