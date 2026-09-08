@@ -245,39 +245,36 @@ local function parse_output(output, git_root)
 	local status = {}
 	local status_trie = trie.create_node()
 
-	for line in output:gmatch("[^\r\n]+") do
-		if #line < 4 then
-			goto continue
-		end
+	local records = vim.split(output, "\0", { plain = true, trimempty = true })
+	local index = 1
 
-		local status_code = line:sub(1, 2)
-		local filepath = line:sub(4)
+	while index <= #records do
+		local record = records[index]
+		if #record >= 4 then
+			local status_code = record:sub(1, 2)
+			local filepath = record:sub(4)
 
-		if not filepath or filepath == "" then
-			goto continue
-		end
+			if filepath ~= "" then
+				if status_code:sub(1, 1) == "R" or status_code:sub(1, 1) == "C" then
+					index = index + 1
+				end
 
-		if status_code:sub(1, 1) == "R" or status_code:sub(1, 1) == "C" then
-			local arrow_pos = filepath:find(" %-> ")
-			if arrow_pos then
-				filepath = filepath:sub(arrow_pos + 4)
+				if filepath:sub(1, 2) == "./" then
+					filepath = filepath:sub(3)
+				end
+
+				local is_directory = filepath:sub(-1) == "/"
+
+				filepath = path.git_to_os(filepath)
+				local abs_path = path.join(git_root, filepath)
+				abs_path = path.remove_trailing_slash(abs_path)
+
+				status[abs_path] = status_code
+				trie.insert(status_trie, abs_path, status_code, git_root, is_directory)
 			end
 		end
 
-		if filepath:sub(1, 2) == "./" then
-			filepath = filepath:sub(3)
-		end
-
-		local is_directory = filepath:sub(-1) == "/"
-
-		filepath = path.git_to_os(filepath)
-		local abs_path = path.join(git_root, filepath)
-		abs_path = path.remove_trailing_slash(abs_path)
-
-		status[abs_path] = status_code
-		trie.insert(status_trie, abs_path, status_code, git_root, is_directory)
-
-		::continue::
+		index = index + 1
 	end
 
 	return status, status_trie
@@ -319,7 +316,7 @@ function M.get_status_async(dir, callback)
 		local stdout = uv.new_pipe(false)
 		local output_parts = {}
 
-		local args = { "status", "--porcelain" }
+		local args = { "status", "--porcelain=v1", "-z" }
 		if include_ignored then
 			table.insert(args, "--ignored")
 		end

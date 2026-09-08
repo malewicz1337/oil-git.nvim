@@ -334,15 +334,15 @@ describe("git", function()
 			end
 
 			assert.same(
-				{ "status", "--porcelain" },
+				{ "status", "--porcelain=v1", "-z" },
 				capture_args({ debug = false })
 			)
 			assert.same(
-				{ "status", "--porcelain", "--ignored" },
+				{ "status", "--porcelain=v1", "-z", "--ignored" },
 				capture_args({ debug = false, show_ignored_files = true })
 			)
 			assert.same(
-				{ "status", "--porcelain", "--ignored" },
+				{ "status", "--porcelain=v1", "-z", "--ignored" },
 				capture_args({ debug = false, show_ignored_directories = true })
 			)
 
@@ -419,6 +419,37 @@ describe("git", function()
 			local file_path = repo_dir .. "/untracked.lua"
 			assert.is_not_nil(result_status[file_path])
 			assert.equals("??", result_status[file_path])
+
+			helpers.cleanup(repo_dir)
+		end)
+
+		it("should detect paths containing spaces", function()
+			local repo_dir = helpers.create_temp_git_repo()
+			helpers.create_and_commit_file(
+				repo_dir,
+				"directory with spaces/file with spaces.lua",
+				"-- original content"
+			)
+			helpers.create_file(
+				repo_dir,
+				"directory with spaces/file with spaces.lua",
+				"-- modified content"
+			)
+
+			local done = false
+			local result_status
+
+			git.get_status_async(repo_dir, function(status)
+				result_status = status
+				done = true
+			end)
+
+			helpers.wait_for(function()
+				return done
+			end)
+
+			local file_path = repo_dir .. "/directory with spaces/file with spaces.lua"
+			assert.equals(" M", result_status[file_path])
 
 			helpers.cleanup(repo_dir)
 		end)
