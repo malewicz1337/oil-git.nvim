@@ -448,7 +448,8 @@ describe("git", function()
 				return done
 			end)
 
-			local file_path = repo_dir .. "/directory with spaces/file with spaces.lua"
+			local file_path = repo_dir
+				.. "/directory with spaces/file with spaces.lua"
 			assert.equals(" M", result_status[file_path])
 
 			helpers.cleanup(repo_dir)

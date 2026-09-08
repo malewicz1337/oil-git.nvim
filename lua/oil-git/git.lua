@@ -245,7 +245,10 @@ local function parse_output(output, git_root)
 	local status = {}
 	local status_trie = trie.create_node()
 
-	local records = vim.split(output, "\0", { plain = true, trimempty = true })
+	local records = vim.split(output, "\0", {
+		plain = true,
+		trimempty = true,
+	})
 	local index = 1
 
 	while index <= #records do
@@ -255,7 +258,10 @@ local function parse_output(output, git_root)
 			local filepath = record:sub(4)
 
 			if filepath ~= "" then
-				if status_code:sub(1, 1) == "R" or status_code:sub(1, 1) == "C" then
+				if
+					status_code:sub(1, 1) == "R"
+					or status_code:sub(1, 1) == "C"
+				then
 					index = index + 1
 				end
 
