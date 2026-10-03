@@ -173,6 +173,33 @@ describe("init", function()
 				)
 			end
 		end)
+
+		describe("colorscheme changes", function()
+			local colorscheme
+			local added_hl
+
+			before_each(function()
+				colorscheme = vim.g.colors_name or "default"
+				added_hl = vim.api.nvim_get_hl(0, { name = "OilGitAdded" })
+			end)
+
+			after_each(function()
+				vim.cmd.colorscheme(colorscheme)
+				vim.api.nvim_set_hl(0, "OilGitAdded", added_hl)
+			end)
+
+			it("should restore configured colors after a change", function()
+				vim.api.nvim_set_hl(0, "OilGitAdded", {})
+				oil_git.setup({
+					highlights = { OilGitAdded = { fg = "#123456" } },
+				})
+
+				vim.cmd("colorscheme default")
+
+				local hl = vim.api.nvim_get_hl(0, { name = "OilGitAdded" })
+				assert.equals(0x123456, hl.fg)
+			end)
+		end)
 	end)
 
 	describe("refresh", function()

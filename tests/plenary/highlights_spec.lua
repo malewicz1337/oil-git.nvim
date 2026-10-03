@@ -85,27 +85,22 @@ describe("highlights", function()
 			highlights.setup()
 
 			local hl = vim.api.nvim_get_hl(0, { name = "OilGitAdded" })
-			assert.is_not_nil(hl.fg)
+			assert.equals(0x123456, hl.fg)
 		end)
 
-		it(
-			"should recreate highlight groups if they exist but have been cleared (e.g. by colorscheme)",
-			function()
-				vim.api.nvim_set_hl(0, "OilGitAdded", { fg = "#123456" })
-				vim.cmd("hi clear OilGitAdded")
+		it("should restore cleared highlight groups", function()
+			vim.api.nvim_set_hl(0, "OilGitAdded", { fg = "#123456" })
+			vim.cmd("hi clear OilGitAdded")
 
-				assert.equals(1, vim.fn.hlexists("OilGitAdded"))
-				local cleared_hl =
-					vim.api.nvim_get_hl(0, { name = "OilGitAdded" })
-				assert.is_nil(cleared_hl.fg)
+			assert.equals(1, vim.fn.hlexists("OilGitAdded"))
+			local cleared_hl = vim.api.nvim_get_hl(0, { name = "OilGitAdded" })
+			assert.is_nil(cleared_hl.fg)
 
-				highlights.setup()
+			highlights.setup()
 
-				local restored_hl =
-					vim.api.nvim_get_hl(0, { name = "OilGitAdded" })
-				assert.is_not_nil(restored_hl.fg)
-			end
-		)
+			local restored_hl = vim.api.nvim_get_hl(0, { name = "OilGitAdded" })
+			assert.is_not_nil(restored_hl.fg)
+		end)
 	end)
 
 	describe("clear", function()
