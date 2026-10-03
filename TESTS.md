@@ -25,6 +25,17 @@ tests/
     └── highlights_spec.lua
 ```
 
+Highlight regressions cover cleared groups, preservation of existing colors,
+and restoration of configured colors after `:colorscheme default`.
+Run the affected suites with an isolated Neovim configuration:
+
+```bash
+nvim --headless -u tests/minimal_init.lua \
+  -c "PlenaryBustedDirectory tests/plenary/highlights_spec.lua {minimal_init='tests/minimal_init.lua', sequential=true}"
+nvim --headless -u tests/minimal_init.lua \
+  -c "PlenaryBustedDirectory tests/plenary/init_spec.lua {minimal_init='tests/minimal_init.lua', sequential=true}"
+```
+
 ## Adding Tests
 
 1. Create `tests/plenary/<module>_spec.lua`

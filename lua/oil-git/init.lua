@@ -146,6 +146,13 @@ local function setup_autocmds()
 		end,
 		once = true,
 	})
+
+	vim.api.nvim_create_autocmd("ColorScheme", {
+		group = group,
+		callback = function()
+			highlights.setup()
+		end,
+	})
 end
 
 function M.init()
