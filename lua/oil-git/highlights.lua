@@ -133,9 +133,8 @@ function M.setup()
 	signcolumn_cache = nil
 	local cfg = config.get_raw()
 	for name, opts in pairs(cfg.highlights) do
-		if vim.fn.hlexists(name) == 0 then
-			vim.api.nvim_set_hl(0, name, opts)
-		end
+		opts.default = true
+		vim.api.nvim_set_hl(0, name, opts)
 	end
 end
 
